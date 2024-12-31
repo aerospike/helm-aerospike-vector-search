@@ -45,7 +45,7 @@ jobs:
         uses: jfrog/setup-jfrog-cli@v4
         env:
           JF_URL: https://aerospike.jfrog.io
-          JF_ACCESS_TOKEN: ${{ secrets.JF_ECO_CONTRIB_TOKEN }}
+          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
           JF_PROJECT: ${{ github.event.inputs.jfrog_project }}
 
         
