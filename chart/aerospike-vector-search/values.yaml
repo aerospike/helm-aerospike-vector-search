@@ -1,0 +1,290 @@
+# Default values for aerospike-vector-search.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 1
+
+image:
+  repository: "aerospike/aerospike-vector-search"
+  pullPolicy: "IfNotPresent"
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "1.0.0"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+aerospikeVectorSearchConfig: {}
+#cluster:
+#  # Unique identifier for this cluster.
+#  cluster-name: aerospike-vector-search
+#
+#  # Custom node-id as 8 byte long in Hexadecimal format.
+#  #  It will be auto-generated if not specified.
+#  node-id: a1
+#
+# node-roles:
+#   - INDEX_QUERY
+#   - INDEX_UPDATE
+## If TLS is desired, TLS configuration ids used
+## and associated TLS configurations.
+#tls:
+#  service-tls:
+#    trust-store:
+#      store-file: tls/ca.aerospike.com.truststore.jks
+#      store-password-file: tls/storepass
+#    key-store:
+#      store-file: tls/avs.aerospike.com.keystore.jks
+#      store-password-file: tls/storepass
+#      key-password-file: tls/keypass
+#
+#  interconnect-tls:
+#    trust-store:
+#      store-file: tls/ca.aerospike.com.truststore.jks
+#      store-password-file: tls/storepass
+#    key-store:
+#      store-file: tls/avs.aerospike.com.keystore.jks
+#      store-password-file: tls/storepass
+#      key-password-file: tls/keypass
+#    override-tls-hostname: avs.aerospike.com
+#
+#  aerospike-tls:
+#    trust-store:
+#      store-file: tls/ca.aerospike.com.truststore.jks
+#      store-password-file: tls/storepass
+#    key-store:
+#      store-file: tls/avs.aerospike.com.keystore.jks
+#      store-password-file: tls/storepass
+#      key-password-file: tls/keypass
+#    override-tls-hostname: asd.aerospike.com
+#
+## The AVS service listening ports, TLS and network interface.
+#service:
+#  ports:
+#    # Clear text service port.
+#    5000:
+#      # Hostname/IP/network interface name to bind to.
+#      # If not specified binds to all interfaces.
+#      addresses:
+#        localhost
+#      # Required when running behind NAT
+#      advertised-listeners:
+#        default:
+#          # List of externally accessible addresses and
+#          # ports for this AVS instance.
+#          - address: 10.0.0.1
+#            port: 5000
+#
+#    # TLS service port.
+#    5443:
+#      # Hostname/IP/network interface name to bind to.
+#      # If not specified binds to all interfaces.
+#      addresses:
+#        localhost
+#      tls-id: service-tls
+#      # Required when running behind NAT
+#      advertised-listeners:
+#        default:
+#          # List of externally accessible addresses and
+#          # ports for this AVS instance.
+#          # Use the hostname/domain name/IP here to match the TLS certificate.
+#          - address: 10.0.0.1
+#            port: 5443
+#
+## Management API listening ports, TLS and network interface.
+#manage:
+#  ports:
+#    # Clear text port
+#    5040:
+#      # Hostname/IP/network interface name to bind to.
+#      # If not specified binds to all interfaces.
+#      addresses:
+#        localhost
+#    # Manage TLS port
+#    5483:
+#      # Hostname/IP/network interface name to bind to.
+#      # If not specified binds to all interfaces.
+#      addresses:
+#        localhost
+#      tls-id: service-tls
+#
+## Intra cluster interconnect listening ports, TLS and network interface.
+#interconnect:
+#  # Interconnect client side TLS configuration
+#  # when TLS is enabled for interconnect
+#  client-tls-id: interconnect-tls
+#  ports:
+#    # Clear text port
+#    5001:
+#      # Hostname/IP/network interface name to bind to.
+#      # If not specified binds to all interfaces.
+#      addresses:
+#        localhost
+#    # TLS interconnect port
+#    5444:
+#      #Hostname/IP/network interface name to bind to.
+#      # If not specified binds to all interfaces.
+#      addresses:
+#        localhost
+#      tls-id: interconnect-tls
+#
+#heartbeat:
+#  # Seed nodes to discover and form a cluster.
+#  seeds:
+#    # Clear text seed
+#    - address: 192.168.1.5
+#      port: 5001
+#    # TLS seed node
+#    - address: 192.168.1.5
+#      port: 5001
+#
+## To enable client authentication
+#security:
+#  auth-token:
+#    private-key: samples/auth/private_key.pem
+#    public-key: samples/auth/public_key.pem
+#    token-expiry: 300_000
+#
+## Aerospike DB storage configuration
+#storage:
+#  seeds:
+#    - localhost:
+#        port: 3000
+#        # Aerospike TLS port
+#        port: 3010
+#
+#  client-policy:
+#    max-conns-per-node: 1000
+#    # If TLS is required to connect to Aerospike
+#    tls-id: aerospike-tls
+#    #
+#    # Aerospike credentials if required.
+#    credentials:
+#      username: admin
+#      password-file: aerospike-password.txt
+#
+## HNSW index configuration defaults
+#hnsw:
+#  healer:
+#    # Schedule healer runs using Quartz cron expressions.
+#    # See https://www.freeformatter.com/cron-expression-generator-quartz.html
+#    # and https://www.quartz-scheduler.org/documentation/quartz-2.3.0/tutorials/crontrigger.html
+#    # Expression below runs the healer once every 5 hours.
+#    schedule: "0 0 0/5 ? * * *"
+#  # Disable vector integrity check.
+#  enable-vector-integrity-check: false
+#
+## The logging properties.
+#logging:
+#  file: /var/log/aerospike-vector-search/aerospike-vector-search.log
+#  enable-console-logging: true
+#  levels:
+#    root: debug
+
+
+initContainers: []
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  # Automatically mount a ServiceAccount's API credentials?
+  automount: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+service:
+  enabled: false
+  annotations: {}
+  labels: {}
+  type: LoadBalancer
+  clusterIP: ""
+  externalIPs: []
+  loadBalancerIP: ""
+  loadBalancerSourceRanges: []
+  loadBalancerClass: ""
+  externalTrafficPolicy: ""
+  sessionAffinity: ""
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+    - IPv4
+  ports:
+    - name: "svc-port"
+      port: 80
+      targetPort: 5000
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+  # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: chart-example.local
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+
+# Additional volumes on the output Deployment definition.
+extraVolumes: []
+# - name: foo
+#   secret:
+#     secretName: mysecret
+#     optional: false
+
+# Additional volumeMounts on the output Deployment definition.
+extraVolumeMounts: []
+# - name: foo
+#   mountPath: "/etc/foo"
+#   readOnly: true
+extraSecretVolumeMounts: []
+# - name: foo
+#   mountPath: "/etc/foo"
+#   readOnly: true
+
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
