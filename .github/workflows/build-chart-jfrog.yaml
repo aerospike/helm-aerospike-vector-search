@@ -1,30 +1,19 @@
 name: Build and Bundle Jfrog Helm chart
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
-      jfrog_project:
-        description: 'Name of the jfrog project to deploy the chart to'
-        required: true
-        default: 'ecosystem'
-      chart_name:
-        description: 'Name of the chart to build'
-        required: true
-        default: 'aerospike-vector-search'
-      repo_name: 
-        description: 'Name of the jfrog repo to deploy the chart to'
-        required: true
-        default: 'ecosystem-helm-dev-local'
       chart_version: 
         description: 'Build number to use for the build metadata'
         required: true
         default: '0.7.0'
 env:
-    JF_PROJECT: ${{ github.event.inputs.jfrog_project }}
-    JF_REPO: ${{ github.event.inputs.repo_name }}
-    CHART_VERSION: ${{ github.event.inputs.chart_version }}
-    CHART_NAME: ${{ github.event.inputs.chart_name }}
-
+    JF_PROJECT: ecosystem
+    JF_REPO: ecosystem-helm-dev-local
+    CHART_VERSION: ""
+    CHART_NAME: 'aerospike-vector-search'
 jobs:
   build-chart:
     runs-on: ubuntu-latest
@@ -32,26 +21,50 @@ jobs:
       - name: Checkout current repository
         uses: actions/checkout@v3
 
-    # You can sign helm charts but not doing this for now
-    #   - name: setup GPG
-    #     uses: aerospike/shared-workflows/devops/setup-gpg@main
-    #     with:
-    #       gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
-    #       gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
-    #       gpg-key-pass: ${{ secrets.GPG_PASS }}
-    #       gpg-key-name: "aerospike-inc"
+      - name: Determine Version
+        id: get_version
+        run: |
+          if [[ -n "${{ github.event.release.tag_name }}" ]]; then
+            TAG_NAME=${{ github.event.release.tag_name }}
+            CHART_VERSION=${TAG_NAME#v}
+          elif [[ -n "${{ github.event.inputs.chart_version }}" ]]; then
+            CHART_VERSION=${{ github.event.inputs.chart_version }}
+          else
+            echo "Error: Tag name not provided and not a release event."
+            exit 1
+          fi
+          echo "CHART_VERSION=$CHART_VERSION" >> $GITHUB_ENV
+
+      - name: setup GPG
+        uses: aerospike/shared-workflows/devops/setup-gpg@main
+        with:
+          gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
+          gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
+          gpg-key-pass: ${{ secrets.GPG_PASS }}
+          gpg-key-name: "aerospike-inc"
           
       - name: setup jfrog
         uses: jfrog/setup-jfrog-cli@v4
         env:
           JF_URL: https://aerospike.jfrog.io
           JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
-          JF_PROJECT: ${{ github.event.inputs.jfrog_project }}
+          JF_PROJECT: ${{ env.JF_PROJECT }}
 
-        
-      - name: "Deploy helm to JFrog"
+      - name: Set Helm Chart Version
+        uses: mikefarah/yq@v4.44.6
+        with: 
+            cmd: yq e -i '.version = "${{ env.CHART_VERSION }}"' chart/$CHART_NAME/Chart.yaml
+      - name: "Deploy sign and deploy helm to JFrog"
+        env:
+            GPG_TTY: no-tty
+            GPG_PASSPHRASE: ${{ secrets.GPG_PASS }}
         run: |
-            helm package $CHART_NAME
+            cd chart
+
+            gpg --export --no-tty  --passphrase "$GPG_PASSPHRASE" > ~/.gnupg/pubring.gpg
+            gpg --export-secret-keys --no-tty  --passphrase "$GPG_PASSPHRASE">~/.gnupg/secring.gpg
+            echo $GPG_PASSPHRASE > passphrase.txt
+            helm --sign --key='aerospike-inc' --keyring='/home/runner/.gnupg/secring.gpg' --passphrase-file passphrase.txt  package $CHART_NAME
             jf rt u "${{env.CHART_NAME}}-${{env.CHART_VERSION}}.tgz" "${{env.JF_REPO}}/${{env.CHART_NAME}}/${{env.CHART_VERSION}}/" \
             --build-name="${{env.CHART_NAME}}-helm" --build-number="${{env.CHART_VERSION}}" --project="${{env.JF_PROJECT}}"
             jf rt build-collect-env "${{env.CHART_NAME}}-helm" "${{env.CHART_VERSION}}"
