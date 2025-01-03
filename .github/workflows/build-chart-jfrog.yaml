@@ -8,7 +8,7 @@ on:
       chart_version: 
         description: 'Build number to use for the build metadata'
         required: true
-        default: '0.7.0'
+        default: '0.0.0'
 env:
     JF_PROJECT: ecosystem
     JF_REPO: ecosystem-helm-dev-local
