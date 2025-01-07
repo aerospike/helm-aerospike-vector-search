@@ -54,7 +54,7 @@ helm repo add aerospike-io https://artifact.aerospike.io/artifactory/api/helm/ae
 ## Deploy the AVS Cluster
 
 We recommend creating a new `.yaml` for providing configuration values to the helm chart for deployment.
-See the [examples](examples) folder for examples.
+See the [Aerospike Vector](https://github.com/aerospike/aerospike-vector) repository for examples and deployment scripts.
 
 A sample values yaml file is shown below:
 
@@ -62,7 +62,7 @@ A sample values yaml file is shown below:
 replicaCount: 1
 
 image:
-  tag: "0.11.1"
+  tag: "1.0.0"
 
 aerospikeVectorSearchConfig:
   aerospike:
@@ -74,15 +74,12 @@ aerospikeVectorSearchConfig:
 
 Here `replicaCount` is the count of AVS pods that are deployed.
 The AVS configuration is provided as yaml under the key `aerospikeVectorSearchConfig`.
-[comment]: <> (Link to AVS docs should be added)
-See [Aerospike Vector Search configuration]() for details.
 
-We recommend naming the file with the name of the AVS cluster. For example if you want to name your AVS cluster as
-`avs`, create a file `avs-values.yaml`.
-Once you have created this custom values file, deploy the avs cluster, using the following command.
+See [Aerospike Vector Search](https://aerospike.com/docs/vector/operate/configuration) configuration documentation for more details on AVS configuration.
+
 
 ### Create a new namespace
-We recommend using `avs` namespace for the AVS cluster. If the namespace does not exist run the following command:
+We recommend using a namespace for the AVS cluster. If the namespace does not exist run the following command:
 ```shell
 kubectl create namespace avs
 ```
