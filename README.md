@@ -1,1 +1,1 @@
-chart/aerospike-vector-search/README.md
+charts/aerospike-vector-search/README.md
