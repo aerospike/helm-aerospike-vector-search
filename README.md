@@ -1,2 +1,1 @@
-# helm-aerospike-vector
-Helm chart for aerospike vector search
+chart/aerospike-vector-search/README.md

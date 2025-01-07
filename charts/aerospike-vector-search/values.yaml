@@ -14,8 +14,18 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
-aerospikeVectorSearchConfig: {}
-#cluster:
+aerospikeVectorSearchConfig:
+  # Optional: service ports configuration
+  service:
+    ports: {}
+  # Optional: manage ports configuration
+  manage:
+    ports: {}
+  # Optional: interconnect ports configuration
+  interconnect:
+    ports: {}
+
+# cluster:
 #  # Unique identifier for this cluster.
 #  cluster-name: aerospike-vector-search
 #
@@ -23,12 +33,12 @@ aerospikeVectorSearchConfig: {}
 #  #  It will be auto-generated if not specified.
 #  node-id: a1
 #
-# node-roles:
-#   - INDEX_QUERY
-#   - INDEX_UPDATE
-## If TLS is desired, TLS configuration ids used
-## and associated TLS configurations.
-#tls:
+# # node-roles:
+# #   - INDEX_QUERY
+# #   - INDEX_UPDATE
+# ## If TLS is desired, TLS configuration ids used
+# ## and associated TLS configurations.
+# tls:
 #  service-tls:
 #    trust-store:
 #      store-file: tls/ca.aerospike.com.truststore.jks
@@ -58,8 +68,8 @@ aerospikeVectorSearchConfig: {}
 #      key-password-file: tls/keypass
 #    override-tls-hostname: asd.aerospike.com
 #
-## The AVS service listening ports, TLS and network interface.
-#service:
+# # The AVS service listening ports, TLS and network interface.
+# service:
 #  ports:
 #    # Clear text service port.
 #    5000:
@@ -91,8 +101,8 @@ aerospikeVectorSearchConfig: {}
 #          - address: 10.0.0.1
 #            port: 5443
 #
-## Management API listening ports, TLS and network interface.
-#manage:
+# # Management API listening ports, TLS and network interface.
+# manage:
 #  ports:
 #    # Clear text port
 #    5040:
@@ -108,8 +118,8 @@ aerospikeVectorSearchConfig: {}
 #        localhost
 #      tls-id: service-tls
 #
-## Intra cluster interconnect listening ports, TLS and network interface.
-#interconnect:
+# # Intra cluster interconnect listening ports, TLS and network interface.
+# interconnect:
 #  # Interconnect client side TLS configuration
 #  # when TLS is enabled for interconnect
 #  client-tls-id: interconnect-tls
@@ -128,7 +138,7 @@ aerospikeVectorSearchConfig: {}
 #        localhost
 #      tls-id: interconnect-tls
 #
-#heartbeat:
+# heartbeat:
 #  # Seed nodes to discover and form a cluster.
 #  seeds:
 #    # Clear text seed
@@ -138,15 +148,15 @@ aerospikeVectorSearchConfig: {}
 #    - address: 192.168.1.5
 #      port: 5001
 #
-## To enable client authentication
-#security:
+# # To enable client authentication
+# security:
 #  auth-token:
 #    private-key: samples/auth/private_key.pem
 #    public-key: samples/auth/public_key.pem
 #    token-expiry: 300_000
 #
-## Aerospike DB storage configuration
-#storage:
+# # Aerospike DB storage configuration
+# storage:
 #  seeds:
 #    - localhost:
 #        port: 3000
@@ -163,8 +173,8 @@ aerospikeVectorSearchConfig: {}
 #      username: admin
 #      password-file: aerospike-password.txt
 #
-## HNSW index configuration defaults
-#hnsw:
+# # HNSW index configuration defaults
+# hnsw:
 #  healer:
 #    # Schedule healer runs using Quartz cron expressions.
 #    # See https://www.freeformatter.com/cron-expression-generator-quartz.html
@@ -174,8 +184,8 @@ aerospikeVectorSearchConfig: {}
 #  # Disable vector integrity check.
 #  enable-vector-integrity-check: false
 #
-## The logging properties.
-#logging:
+# # The logging properties.
+# logging:
 #  file: /var/log/aerospike-vector-search/aerospike-vector-search.log
 #  enable-console-logging: true
 #  levels:

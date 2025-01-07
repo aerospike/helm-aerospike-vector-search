@@ -51,15 +51,15 @@ jobs:
           JF_PROJECT: ${{ env.JF_PROJECT }}
 
       - name: Set Helm Chart Version
-        uses: mikefarah/yq@v4.44.6
+        uses: mikefarah/yq@4839dbbf80445070a31c7a9c1055da527db2d5ee
         with: 
-            cmd: yq e -i '.version = "${{ env.CHART_VERSION }}"' chart/$CHART_NAME/Chart.yaml
+            cmd: yq e -i '.version = "${{ env.CHART_VERSION }}"' charts/$CHART_NAME/Chart.yaml
       - name: "Deploy sign and deploy helm to JFrog"
         env:
             GPG_TTY: no-tty
             GPG_PASSPHRASE: ${{ secrets.GPG_PASS }}
         run: |
-            cd chart
+            cd charts
 
             gpg --export --no-tty  --passphrase "$GPG_PASSPHRASE" > ~/.gnupg/pubring.gpg
             gpg --export-secret-keys --no-tty  --passphrase "$GPG_PASSPHRASE">~/.gnupg/secring.gpg

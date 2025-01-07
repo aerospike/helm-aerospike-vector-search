@@ -22,7 +22,7 @@ spec:
           {{- toYaml . | nindent 8 }}
         {{- end }}
       labels:
-        app:  {{ include "aerospike-vector-search.fullname" . }}
+        app: {{ include "aerospike-vector-search.fullname" . }}
         {{- include "aerospike-vector-search.labels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
@@ -45,22 +45,45 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if and .Values.aerospikeVectorSearchConfig.service (not (empty .Values.aerospikeVectorSearchConfig.service.ports)) }}
           ports:
-          {{- range $k := .Values.aerospikeVectorSearchConfig.service.ports | keys }}
-            - name: {{ printf "svc-%s" $k }}
-              containerPort: {{ $k }}
-              protocol: TCP
-              {{- end -}}
-          {{- range $k := .Values.aerospikeVectorSearchConfig.manage.ports | keys }}
-            - name: {{ printf "manage-%s" $k }}
-              containerPort: {{ $k }}
-              protocol: TCP
-            {{- end -}}
-          {{- range $k := .Values.aerospikeVectorSearchConfig.interconnect.ports | keys }}
-            - name: {{ printf "interc-%s" $k }}
-              containerPort: {{ $k }}
-              protocol: TCP
+            {{- $svcPortCounter := 0 }}
+            {{- range $port, $config := .Values.aerospikeVectorSearchConfig.service.ports }}
+            - name: {{ printf "svc-%s" (default (printf "%d" $svcPortCounter) $config.name) }}
+              {{- $svcPortCounter = add $svcPortCounter 1 }}
+              containerPort: {{ $port }}
+              protocol: {{ default "TCP" $config.protocol }}
+              {{- if $config.addresses }}
+              addresses: {{ $config.addresses }}
+              {{- end }}
             {{- end }}
+          {{- end }}
+          {{- if and .Values.aerospikeVectorSearchConfig.manage (not (empty .Values.aerospikeVectorSearchConfig.manage.ports)) }}
+          ports:
+            {{- $managePortCounter := 0 }}
+            {{- range $port, $config := .Values.aerospikeVectorSearchConfig.manage.ports }}
+            - name: {{ printf "manage-%s" (default (printf "%d" $managePortCounter) $config.name) }}
+              {{- $managePortCounter = add $managePortCounter 1 }}
+              containerPort: {{ $port }}
+              protocol: {{ default "TCP" $config.protocol }}
+              {{- if $config.addresses }}
+              addresses: {{ $config.addresses }}
+              {{- end }}
+            {{- end }}
+          {{- end }}
+          {{- if and .Values.aerospikeVectorSearchConfig.interconnect (not (empty .Values.aerospikeVectorSearchConfig.interconnect.ports)) }}
+          ports:
+            {{- $interconnectPortCounter := 0 }}
+            {{- range $port, $config := .Values.aerospikeVectorSearchConfig.interconnect.ports }}
+            - name: {{ printf "interc-%s" (default (printf "%d" $interconnectPortCounter) $config.name) }}
+              {{- $interconnectPortCounter = add $interconnectPortCounter 1 }}
+              containerPort: {{ $port }}
+              protocol: {{ default "TCP" $config.protocol }}
+              {{- if $config.addresses }}
+              addresses: {{ $config.addresses }}
+              {{- end }}
+            {{- end }}
+          {{- end }}
           volumeMounts:
             - name: aerospike-vector-search-configmap
               mountPath: /etc/aerospike-vector-search/aerospike-vector-search.yml
