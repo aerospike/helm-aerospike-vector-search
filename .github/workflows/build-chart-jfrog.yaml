@@ -1,8 +1,12 @@
 name: Build and Bundle Jfrog Helm chart
 
+
 on:
-  release:
-    types: [published]
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       chart_version: 
@@ -24,13 +28,14 @@ jobs:
       - name: Determine Version
         id: get_version
         run: |
-          if [[ -n "${{ github.event.release.tag_name }}" ]]; then
-            TAG_NAME=${{ github.event.release.tag_name }}
-            CHART_VERSION=${TAG_NAME#v}
-          elif [[ -n "${{ github.event.inputs.chart_version }}" ]]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             CHART_VERSION=${{ github.event.inputs.chart_version }}
+          elif [[ "${{ github.event_name}}" == "push" ]]; then
+            TAG=${GITHUB_REF#refs/tags/} 
+              # Remove "v" prefix to get the version
+            CHART_VERSION=${TAG#v}
           else
-            echo "Error: Tag name not provided and not a release event."
+            echo "Unable to determine version"
             exit 1
           fi
           echo "CHART_VERSION=$CHART_VERSION" >> $GITHUB_ENV
