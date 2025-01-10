@@ -11,7 +11,7 @@ maintainers:
     email: developers@aerospike.com
 
 # The helm chart version
-version: 0.7.0 # Patch version set during CI
+version: 0.7.0  # Patch version set during CI
 
 # The default version of Aerospike Vector Search
 appVersion: "1.0.0"
