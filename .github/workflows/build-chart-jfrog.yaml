@@ -1,8 +1,6 @@
 name: Build and Bundle Jfrog Helm chart
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v*.*.*'
   workflow_dispatch:
