@@ -68,7 +68,8 @@ jobs:
             gpg --export-secret-keys --no-tty  --passphrase "$GPG_PASSPHRASE">~/.gnupg/secring.gpg
             echo $GPG_PASSPHRASE > passphrase.txt
             helm --sign --key='aerospike-inc' --keyring='/home/runner/.gnupg/secring.gpg' --passphrase-file passphrase.txt  package $CHART_NAME
-            jf rt u "${{env.CHART_NAME}}-${{env.CHART_VERSION}}.tgz" "${{env.JF_REPO}}/${{env.CHART_NAME}}/${{env.CHART_VERSION}}/" \
+            find .
+            jf rt u "${{env.CHART_NAME}}-${{env.CHART_VERSION}}.tgz*" "${{env.JF_REPO}}/${{env.CHART_NAME}}/${{env.CHART_VERSION}}/" \
             --build-name="${{env.CHART_NAME}}-helm" --build-number="${{env.CHART_VERSION}}" --project="${{env.JF_PROJECT}}"
             jf rt build-collect-env "${{env.CHART_NAME}}-helm" "${{env.CHART_VERSION}}"
             jf rt build-add-git "${{env.CHART_NAME}}-helm" "${{env.CHART_VERSION}}"
