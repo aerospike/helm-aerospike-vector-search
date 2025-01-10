@@ -1,6 +1,4 @@
 name: Build and Bundle Jfrog Helm chart
-
-
 on:
   push:
     branches:
@@ -59,7 +57,7 @@ jobs:
         uses: mikefarah/yq@4839dbbf80445070a31c7a9c1055da527db2d5ee
         with: 
             cmd: yq e -i '.version = "${{ env.CHART_VERSION }}"' charts/$CHART_NAME/Chart.yaml
-      - name: "Deploy sign and deploy helm to JFrog"
+      - name: "Sign and publish build to JFrog"
         env:
             GPG_TTY: no-tty
             GPG_PASSPHRASE: ${{ secrets.GPG_PASS }}
