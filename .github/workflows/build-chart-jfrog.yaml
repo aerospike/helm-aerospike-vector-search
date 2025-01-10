@@ -1,8 +1,8 @@
 name: Build and Bundle Jfrog Helm chart
-
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
     inputs:
       chart_version: 
@@ -24,13 +24,14 @@ jobs:
       - name: Determine Version
         id: get_version
         run: |
-          if [[ -n "${{ github.event.release.tag_name }}" ]]; then
-            TAG_NAME=${{ github.event.release.tag_name }}
-            CHART_VERSION=${TAG_NAME#v}
-          elif [[ -n "${{ github.event.inputs.chart_version }}" ]]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             CHART_VERSION=${{ github.event.inputs.chart_version }}
+          elif [[ "${{ github.event_name}}" == "push" ]]; then
+            TAG=${GITHUB_REF#refs/tags/} 
+              # Remove "v" prefix to get the version
+            CHART_VERSION=${TAG#v}
           else
-            echo "Error: Tag name not provided and not a release event."
+            echo "Unable to determine version"
             exit 1
           fi
           echo "CHART_VERSION=$CHART_VERSION" >> $GITHUB_ENV
@@ -54,7 +55,7 @@ jobs:
         uses: mikefarah/yq@4839dbbf80445070a31c7a9c1055da527db2d5ee
         with: 
             cmd: yq e -i '.version = "${{ env.CHART_VERSION }}"' charts/$CHART_NAME/Chart.yaml
-      - name: "Deploy sign and deploy helm to JFrog"
+      - name: "Sign and publish build to JFrog"
         env:
             GPG_TTY: no-tty
             GPG_PASSPHRASE: ${{ secrets.GPG_PASS }}
@@ -65,7 +66,8 @@ jobs:
             gpg --export-secret-keys --no-tty  --passphrase "$GPG_PASSPHRASE">~/.gnupg/secring.gpg
             echo $GPG_PASSPHRASE > passphrase.txt
             helm --sign --key='aerospike-inc' --keyring='/home/runner/.gnupg/secring.gpg' --passphrase-file passphrase.txt  package $CHART_NAME
-            jf rt u "${{env.CHART_NAME}}-${{env.CHART_VERSION}}.tgz" "${{env.JF_REPO}}/${{env.CHART_NAME}}/${{env.CHART_VERSION}}/" \
+            find .
+            jf rt u "${{env.CHART_NAME}}-${{env.CHART_VERSION}}.tgz*" "${{env.JF_REPO}}/${{env.CHART_NAME}}/${{env.CHART_VERSION}}/" \
             --build-name="${{env.CHART_NAME}}-helm" --build-number="${{env.CHART_VERSION}}" --project="${{env.JF_PROJECT}}"
             jf rt build-collect-env "${{env.CHART_NAME}}-helm" "${{env.CHART_VERSION}}"
             jf rt build-add-git "${{env.CHART_NAME}}-helm" "${{env.CHART_VERSION}}"
