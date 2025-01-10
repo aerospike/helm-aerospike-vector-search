@@ -1,4 +1,4 @@
-name: Lint
+name: Test
 permissions:
   contents: read
   pull-requests: write
@@ -162,7 +162,9 @@ jobs:
                       files:
                         - /mnt/disks/avs-meta/avs-meta.dat
           EOF
-
+      - name: Setup avs prerequisites
+        run: |
+        
       - name: Run chart-testing (install)
         run: |
           cd chart/aerospike-vector-search
