@@ -9,7 +9,7 @@ aerospikeVectorSearchConfig:
           "0.0.0.0"
   manage:
     ports:
-      5040: { }
+      5040: {}
   interconnect:
     ports:
       5001:
