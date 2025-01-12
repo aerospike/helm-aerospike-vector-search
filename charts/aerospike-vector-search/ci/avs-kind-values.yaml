@@ -1,7 +1,7 @@
 aerospikeVectorSearchConfig:
   cluster:
     cluster-name: "avs-db-1"
-  feature-key-file: "/etc/aerospike-vector-search/features.conf"
+  feature-key-file: "/etc/aerospike/secret/features.conf" # Sharing secret with aerospike.
   service:
     ports:
       5000:
