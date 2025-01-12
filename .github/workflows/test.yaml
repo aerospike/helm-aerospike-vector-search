@@ -3,6 +3,8 @@ permissions:
   contents: read
   pull-requests: write
 on: pull_request
+env: 
+  WORKSPACE: "$(git rev-parse --show-toplevel)"
 
 jobs:
   lint:
@@ -56,7 +58,7 @@ jobs:
           kubectl --namespace aerospike create secret generic aerospike-secret \
           --from-literal=features.conf="$(echo "${{ secrets.FEATURES_CONF }}")"
           
-          kubectl apply -f ci/aerospike.yaml --wait
+          kubectl apply -f ${{env.WORKSPACE}}/ci/aerospike.yaml --wait
 
       - name: Setup avs prerequisites
         run: |
@@ -66,7 +68,7 @@ jobs:
                           --for=condition=ready pod \
                           --selector=app=metallb \
                           --timeout=90s
-          kubectl apply -f "charts/aerospike-vector-search/kind/config/metallb-config.yaml"
+          kubectl apply -f "${{env.WORKSPACE}}/examples/kind/config/metallb-config.yaml"
 
 
           echo "Deploying Istio"
@@ -75,16 +77,15 @@ jobs:
           helm install istio-base istio/base --namespace istio-system --set defaultRevision=default --create-namespace --wait
           helm install istiod istio/istiod --namespace istio-system --create-namespace --wait
           helm install istio-ingress istio/gateway \
-          --values "charts/aerospike-vector-search/kind/config/istio-ingressgateway-values.yaml" \
+          --values "${{env.WORKSPACE}}/examples/kind/config/istio-ingressgateway-values.yaml" \
           --namespace istio-ingress \
           --create-namespace \
           --wait
 
-          kubectl apply -f "charts/aerospike-vector-search/kind/config/gateway.yaml" --wait
-          kubectl apply -f "charts/aerospike-vector-search/kind/config/virtual-service-vector-search.yaml" --wait
+          kubectl apply -f "${{env.WORKSPACE}}/examples/kind/config/gateway.yaml" --wait
+          kubectl apply -f "${{env.WORKSPACE}}/examples/kind/config/virtual-service-vector-search.yaml" --wait
 
       - name: Run chart-testing (install)
         run: |
-          cd chart/aerospike-vector-search
           ct install --namespace aerospike  \
             --target-branch ${{ github.event.repository.default_branch }} 
