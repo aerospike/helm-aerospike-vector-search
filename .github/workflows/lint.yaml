@@ -1,0 +1,34 @@
+name: Lint
+permissions:
+  contents: read
+  pull-requests: write
+on: pull_request
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Helm
+        uses: azure/setup-helm@fe7b79cd5ee1e45176fcad797de68ecaf3ca4814
+        with:
+          version: latest
+
+      - uses: actions/setup-python@v5.3.0
+        with:
+          python-version: '3.x'
+          check-latest: true
+
+      - name: Set up chart-testing
+        uses: helm/chart-testing-action@e6669bcd63d7cb57cb4380c33043eebe5d111992
+
+  
+
+      - name: Run chart-testing (lint)
+        run: |
+          cd charts/aerospike-vector-search
+          ct lint --chart-dirs . --charts . 

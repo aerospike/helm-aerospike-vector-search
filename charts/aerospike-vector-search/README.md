@@ -15,7 +15,9 @@ deployed AVS pods.
 
 ## Adding the helm chart repository
 
-Add the `aerospike-io` helm repository if not already done. (Note: The repository has moved to artifact.aerospike.io. If you are still pointing to aerospike.github.io, please update the repository URL)
+Add the `aerospike-helm` helm repository if not already done. (Note: The repository has moved to artifact.aerospike.io. If you are still pointing to aerospike.github.io, please update the repository URL)
+
+
 
 
 ```shell
@@ -52,7 +54,7 @@ helm repo add aerospike-io https://artifact.aerospike.io/artifactory/api/helm/ae
 ## Deploy the AVS Cluster
 
 We recommend creating a new `.yaml` for providing configuration values to the helm chart for deployment.
-See the [examples](examples) folder for examples.
+See the [Aerospike Vector](https://github.com/aerospike/aerospike-vector) repository for examples and deployment scripts.
 
 A sample values yaml file is shown below:
 
@@ -60,7 +62,7 @@ A sample values yaml file is shown below:
 replicaCount: 1
 
 image:
-  tag: "0.11.1"
+  tag: "1.0.0"
 
 aerospikeVectorSearchConfig:
   aerospike:
@@ -72,31 +74,28 @@ aerospikeVectorSearchConfig:
 
 Here `replicaCount` is the count of AVS pods that are deployed.
 The AVS configuration is provided as yaml under the key `aerospikeVectorSearchConfig`.
-[comment]: <> (Link to AVS docs should be added)
-See [Aerospike Vector Search configuration]() for details.
 
-We recommend naming the file with the name of the AVS cluster. For example if you want to name your AVS cluster as
-`avs`, create a file `avs-values.yaml`.
-Once you have created this custom values file, deploy the avs cluster, using the following command.
+See [Aerospike Vector Search](https://aerospike.com/docs/vector/operate/configuration) configuration documentation for more details on AVS configuration.
+
 
 ### Create a new namespace
-We recommend using `aerospike` namespace for the AVS cluster. If the namespace does not exist run the following command:
+We recommend using a namespace for the AVS cluster. If the namespace does not exist run the following command:
 ```shell
-kubectl create namespace aerospike
+kubectl create namespace avs
 ```
 
 ### Create secrets
-Create the secret for aerospike using your Aerospike licence file
+Create the secret for avs using your Aerospike licence file
 ```shell
 # kubectl --namespace <target namespace> create secret generic avs-secret--from-file=features.conf=<path to features conf file>
-kubectl --namespace aerospike create secret generic aerospike-secret --from-file=features.conf=features.conf
+kubectl --namespace avs create secret generic aerospike-secret --from-file=features.conf=features.conf
 ```
 
 ### Deploy the AVS cluster
 
 ```shell
 # helm install --namespace <target namespace> <helm release name/cluster name> -f <path to custom values yaml> aerospike/aerospike-vector-search
-helm install --namespace aerospike avs -f avs-values.yaml aerospike/aerospike-vector-search --version 0.6.0 
+helm install  avs-chart --namespace avs -f avs-values.yaml aerospike/aerospike-vector-search
 ```
 
 Here `avs` is the release name for the AVS cluster and also its cluster name.
@@ -106,7 +105,7 @@ On successful deployment you should see output similar to below:
 ```shell
 NAME: avs
 LAST DEPLOYED: Tue May 21 15:55:39 2024
-NAMESPACE: aerospike
+NAMESPACE: avs
 STATUS: deployed
 REVISION: 1
 TEST SUITE: None
@@ -153,7 +152,7 @@ Upgrade the AVS deployment using the following command.
 
 ```shell
 #helm upgrade --namespace <target namespace> <helm release name> -f <path to custom values yaml file> aerospike/aerospike-vector-search
-helm upgrade --namespace aerospike avs -f avs-values.yaml aerospike/aerospike-vector-search
+helm upgrade --namespace avs avs-chart -f avs-values.yaml aerospike/aerospike-vector-search
 ```
 
 On successful execution of the command the AVS pods will undergo a rolling restart and come up with the new configuration.
@@ -170,7 +169,7 @@ Edit the `replicaCount` to the desired AVS instance count and upgrade the AVS de
 
 ```shell
 #helm upgrade --namespace <target namespace> <helm release name> -f <path to custom values yaml file> aerospike/aerospike-vector-search
-helm upgrade --namespace aerospike avs-f avs-values.yaml aerospike/aerospike-vector-search
+helm upgrade --namespace avs avs-chart -f avs-values.yaml aerospike/aerospike-vector-search
 ```
 
 Verify that the AVS cluster have been scaled.
