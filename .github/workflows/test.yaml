@@ -1,4 +1,4 @@
-name: Test
+name: Test Chart Install and tests
 permissions:
   contents: read
   pull-requests: write
@@ -7,7 +7,7 @@ env:
   WORKSPACE: "$(git rev-parse --show-toplevel)"
 
 jobs:
-  lint:
+  test-chart:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
