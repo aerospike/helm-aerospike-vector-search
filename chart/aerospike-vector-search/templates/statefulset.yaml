@@ -35,6 +35,34 @@ spec:
       serviceAccountName: {{ include "aerospike-vector-search.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: config-injector
+          image: davi17g/avs-init-container:2.0.0
+          imagePullPolicy: Always
+          volumeMounts:
+            - name: aerospike-vector-search
+              mountPath: /etc/aerospike-vector-search
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: SERVICE_NAME
+              value: {{ include "aerospike-vector-search.fullname" . }}
+            - name: REPLICAS
+              value: {{ .Values.replicaCount | quote }}
+            - name: AEROSPIKE_VECTOR_SEARCH_NODE_ROLES
+              value: {{ .Values.aerospikeVectorSearchNodeRoles | toJson | toString | quote }}
+            - name: AEROSPIKE_VECTOR_SEARCH_CONFIG
+              value: {{ .Values.aerospikeVectorSearchConfig | toJson | toString | quote }}
       {{ if .Values.initContainers }}
       initContainers:
       {{- toYaml .Values.initContainers | nindent 8 }}
@@ -45,6 +73,14 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.env }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{ with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
           {{- range $k := .Values.aerospikeVectorSearchConfig.service.ports | keys }}
             - name: {{ printf "svc-%s" $k }}
@@ -62,10 +98,8 @@ spec:
               protocol: TCP
             {{- end }}
           volumeMounts:
-            - name: aerospike-vector-search-configmap
-              mountPath: /etc/aerospike-vector-search/aerospike-vector-search.yml
-              subPath: aerospike-vector-search.yml
-              readOnly: true
+            - name: aerospike-vector-search
+              mountPath: /etc/aerospike-vector-search
             - name: aerospike-secret
               mountPath: /etc/aerospike-vector-search/secrets
               readOnly: true
@@ -98,10 +132,8 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       volumes:
-        - name: aerospike-vector-search-configmap
-          configMap:
-            name: {{ include "aerospike-vector-search.fullname" . }}
-            optional: false
+        - name: aerospike-vector-search
+          emptyDir: {}
         - name: aerospike-secret
           secret:
             secretName: aerospike-secret
