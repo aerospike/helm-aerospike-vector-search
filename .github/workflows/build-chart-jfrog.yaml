@@ -34,8 +34,8 @@ jobs:
             echo "Unable to determine version"
             exit 1
           fi
-          echo "CHART_VERSION=$CHART_VERSION" >> $GITHUB_ENV
-          echo "chart_version=${CHART_VERSION}>> $GITHUB_OUTPUT
+          echo "CHART_VERSION=${CHART_VERSION}" >> $GITHUB_ENV
+          echo "chart_version=${CHART_VERSION}" >> $GITHUB_OUTPUT
 
   build-chart:
     runs-on: ubuntu-latest
