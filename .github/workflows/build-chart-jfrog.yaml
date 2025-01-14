@@ -93,3 +93,83 @@ jobs:
             cat release-bundle-spec.json
             jf release-bundle-create "${{ env.CHART_NAME }}-helm" "${{ env.CHART_VERSION }}" \
               --spec release-bundle-spec.json --project="${{ env.JF_PROJECT }}" --signing-key="aerospike"
+
+  build-init-container:
+    needs:
+      - build-chart
+    runs-on: ubuntu-latest
+    steps: 
+      - name: 'Git checkout'
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+        with:
+          platforms: all
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: setup jfrog
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: https://aerospike.jfrog.io
+          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
+          JF_PROJECT: ${{ env.JF_PROJECT }}
+
+      - name: Login to Artifact Aerospike Docker Registry
+        run: |
+            jf docker login artifact.aerospike.io --username ${{ vars.JF_USERNAME }} --password ${{ secrets.JF_ACCESS_TOKEN }}
+        env:
+            JFROG_CLI_OFFER_CONFIG: 'false'
+      - name: Configure JFrog CLI
+        run: |
+          jf c add \
+            --url https://artifact.aerospike.io/ \
+            --user ${{ vars.JF_USERNAME }} \
+            --access-token ${{ secrets.JF_ACCESS_TOKEN }} \
+            artifact
+
+          jf c use artifact
+        env:
+          JFROG_CLI_OFFER_CONFIG: 'false'
+    
+# Init container uses chart's version
+      - name: Build and Push Docker Image
+        run: |
+          jf docker buildx bake \
+            --set avs-init-container.tags=artifact.aerospike.io/${{ env.JF_PROJECT }}-container-dev-local/avs-init-container:${{ env.CHART_VERSION }} \
+            --file docker/asvec.docker/bake.hcl \
+            --push \
+            --metadata-file=build-metadata
+        env:
+          DOCKER_BUILDKIT: '1'
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+  
+      - name: Extract Image Name and Digest
+        run: |
+            jq -r '.[] | {digest: .["containerimage.digest"], names: .["image.name"] | split(",")} | "(.digest)"' build-metadata > sha
+            echo artifact.aerospike.io/${{ env.JF_PROJECT }}-container-dev-local/avs-init-container:${{ env.CHART_VERSION }}@$(cat sha) > meta-info
+            echo artifact.aerospike.io/${{ env.JF_PROJECT }}-container-dev-local/avs-init-container:${{ env.CHART_VERSION }}@$(cat sha) > meta-info-latest
+      - name: Create Docker Build Info
+        run: |
+          jf rt build-docker-create \
+            --build-name "avs-init-container" \
+            --build-number "${{ env.CHART_VERSION }}" \
+            --image-file ./meta-info \
+            --project ${{env.JF_PROJECT}} \
+            ecosystem-container-dev-local
+          
+      - name: Publish Build Info
+        run: |
+          export JFROG_CLI_LOG_LEVEL=DEBUG 
+          jf rt build-collect-env --project ecosystem "avs-init-container" "${{ env.CHART_VERSION }}"  
+          jf rt build-add-git --project ecosystem "avs-init-container" "${{ env.CHART_VERSION }}" 
+
+          jf rt build-publish \
+            --detailed-summary \
+            --project ecosystem \
+            "avs-init-container" "env.CHART_VERSION"
+        

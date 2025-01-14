@@ -1,0 +1,11 @@
+{
+  "avs-init-container": {
+    "containerimage.descriptor": {
+      "mediaType": "application/vnd.oci.image.index.v1+json",
+      "digest": "sha256:a1bf2b682427eefd3283aa7b47cd68680165c19c770fafab481e03eb0b0b1750",
+      "size": 1607
+    },
+    "containerimage.digest": "sha256:a1bf2b682427eefd3283aa7b47cd68680165c19c770fafab481e03eb0b0b1750",
+    "image.name": "artifact.aerospike.io/ecosystem-container-dev-local/avs-init-container:partybus"
+  }
+}
