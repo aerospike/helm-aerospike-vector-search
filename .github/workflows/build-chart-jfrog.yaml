@@ -169,6 +169,12 @@ jobs:
       - setup
     runs-on: ubuntu-latest
     steps:
+      - name: setup jfrog
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: https://aerospike.jfrog.io
+          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
+          JF_PROJECT: ${{ env.JF_PROJECT }}
       - name: Create release bundle
         run: |
             echo '{
