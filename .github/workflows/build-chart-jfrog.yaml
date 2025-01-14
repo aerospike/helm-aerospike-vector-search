@@ -1,4 +1,8 @@
 name: Build and Bundle Jfrog Helm chart
+permissions:
+  contents: read
+  pull-requests: write
+
 on:
   push:
     tags:
@@ -12,17 +16,15 @@ on:
 env:
     JF_PROJECT: ecosystem
     JF_REPO: ecosystem-helm-dev-local
-    CHART_VERSION: ""
     CHART_NAME: 'aerospike-vector-search'
 jobs:
-  build-chart:
+  setup:
     runs-on: ubuntu-latest
+    outputs:
+      chart_version: ${{ steps.version.outputs.chart_version }}
     steps:
-      - name: Checkout current repository
-        uses: actions/checkout@v3
-
       - name: Determine Version
-        id: get_version
+        id: version
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             CHART_VERSION=${{ github.event.inputs.chart_version }}
@@ -34,7 +36,16 @@ jobs:
             echo "Unable to determine version"
             exit 1
           fi
-          echo "CHART_VERSION=$CHART_VERSION" >> $GITHUB_ENV
+          echo "CHART_VERSION=${CHART_VERSION}" >> $GITHUB_ENV
+          echo "chart_version=${CHART_VERSION}" >> $GITHUB_OUTPUT
+
+  build-chart:
+    runs-on: ubuntu-latest
+    needs: setup
+    steps:
+      - name: Checkout current repository
+        uses: actions/checkout@v3
+
 
       - name: setup GPG
         uses: aerospike/shared-workflows/devops/setup-gpg@main
@@ -54,7 +65,7 @@ jobs:
       - name: Set Helm Chart Version
         uses: mikefarah/yq@4839dbbf80445070a31c7a9c1055da527db2d5ee
         with: 
-            cmd: yq e -i '.version = "${{ env.CHART_VERSION }}"' charts/$CHART_NAME/Chart.yaml
+            cmd: yq e -i '.version = "${{ needs.setup.outputs.chart_version }}"' charts/$CHART_NAME/Chart.yaml
       - name: "Sign and publish build to JFrog"
         env:
             GPG_TTY: no-tty
@@ -67,25 +78,121 @@ jobs:
             echo $GPG_PASSPHRASE > passphrase.txt
             helm --sign --key='aerospike-inc' --keyring='/home/runner/.gnupg/secring.gpg' --passphrase-file passphrase.txt  package $CHART_NAME
             find .
-            jf rt u "${{env.CHART_NAME}}-${{env.CHART_VERSION}}.tgz*" "${{env.JF_REPO}}/${{env.CHART_NAME}}/${{env.CHART_VERSION}}/" \
-            --build-name="${{env.CHART_NAME}}-helm" --build-number="${{env.CHART_VERSION}}" --project="${{env.JF_PROJECT}}"
-            jf rt build-collect-env "${{env.CHART_NAME}}-helm" "${{env.CHART_VERSION}}"
-            jf rt build-add-git "${{env.CHART_NAME}}-helm" "${{env.CHART_VERSION}}"
-            jf rt build-publish "${{env.CHART_NAME}}-helm" "${{env.CHART_VERSION}}" --project="${{env.JF_PROJECT}}"                  
-      - name: Create release bundle
+            jf rt u "${{env.CHART_NAME}}-${{needs.setup.outputs.chart_version}}.tgz*" "${{env.JF_REPO}}/${{env.CHART_NAME}}/${{needs.setup.outputs.chart_version}}/" \
+            --build-name="${{env.CHART_NAME}}-helm" --build-number="${{needs.setup.outputs.chart_version}}" --project="${{env.JF_PROJECT}}"
+            jf rt build-collect-env "${{env.CHART_NAME}}-helm" "${{needs.setup.outputs.chart_version}}"
+            jf rt build-add-git "${{env.CHART_NAME}}-helm" "${{needs.setup.outputs.chart_version}}"
+            jf rt build-publish "${{env.CHART_NAME}}-helm" "${{needs.setup.outputs.chart_version}}" --project="${{env.JF_PROJECT}}"                  
 
+  build-init-container:
+    needs:
+      - setup
+    runs-on: ubuntu-latest
+    steps: 
+      - name: 'Git checkout'
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+        with:
+          platforms: all
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: setup jfrog
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: https://aerospike.jfrog.io
+          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
+          JF_PROJECT: ${{ env.JF_PROJECT }}
+
+      - name: Login to Artifact Aerospike Docker Registry
+        run: |
+            jf docker login artifact.aerospike.io --username ${{ vars.JF_USERNAME }} --password ${{ secrets.JF_ACCESS_TOKEN }}
+        env:
+            JFROG_CLI_OFFER_CONFIG: 'false'
+      - name: Configure JFrog CLI
+        run: |
+          jf c add \
+            --url https://artifact.aerospike.io/ \
+            --user ${{ vars.JF_USERNAME }} \
+            --access-token ${{ secrets.JF_ACCESS_TOKEN }} \
+            artifact
+
+          jf c use artifact
+        env:
+          JFROG_CLI_OFFER_CONFIG: 'false'
+    
+# Init container uses chart's version
+      - name: Build and Push Docker Image
+        run: |
+          jf docker buildx bake \
+            --set avs-init-container.tags=artifact.aerospike.io/${{ env.JF_PROJECT }}-container-dev-local/avs-init-container:${{ needs.setup.outputs.chart_version }} \
+            --file avs-init-container/bake.hcl \
+            --push \
+            --metadata-file=build-metadata
+        env:
+          DOCKER_BUILDKIT: '1'
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+  
+      - name: Extract Image Name and Digest
+        run: |
+            jq -r '.[] | {digest: .["containerimage.digest"], names: .["image.name"] | split(",")} | "(.digest)"' build-metadata > sha
+            echo artifact.aerospike.io/${{ env.JF_PROJECT }}-container-dev-local/avs-init-container:${{ needs.setup.outputs.chart_version }}@$(cat sha) > meta-info
+            echo artifact.aerospike.io/${{ env.JF_PROJECT }}-container-dev-local/avs-init-container:${{ needs.setup.outputs.chart_version }}@$(cat sha) > meta-info-latest
+      - name: Create Docker Build Info
+        run: |
+          jf rt build-docker-create \
+            --build-name "avs-init-container" \
+            --build-number "${{ needs.setup.outputs.chart_version }}" \
+            --image-file ./meta-info \
+            --project ${{env.JF_PROJECT}} \
+            ${{env.JF_PROJECT}}-container-dev-local
+          
+      - name: Publish Build Info
+        run: |
+          export JFROG_CLI_LOG_LEVEL=DEBUG 
+          jf rt build-collect-env --project ${{env.JF_PROJECT}} "avs-init-container" "${{ needs.setup.outputs.chart_version }}"  
+          jf rt build-add-git --project ${{env.JF_PROJECT}} "avs-init-container" "${{ needs.setup.outputs.chart_version }}" 
+
+          jf rt build-publish \
+            --detailed-summary \
+            --project ${{env.JF_PROJECT}} \
+            "avs-init-container" "${{ needs.setup.outputs.chart_version }}"
+  create-release-bundle:
+    needs:
+      - build-chart
+      - build-init-container
+      - setup
+    runs-on: ubuntu-latest
+    steps:
+      - name: setup jfrog
+        uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: https://aerospike.jfrog.io
+          JF_ACCESS_TOKEN: ${{ secrets.JF_ACCESS_TOKEN }}
+          JF_PROJECT: ${{ env.JF_PROJECT }}
+      - name: Create release bundle
         run: |
             echo '{
               
               "name": "${{ env.CHART_NAME }}-helm",
-              "version": "${{ env.CHART_VERSION }}",
+              "version": "${{ needs.setup.outputs.chart_version }}",
               "files": [
                 {
                   "project": "${{ env.JF_PROJECT }}",
-                  "build": "${{ env.CHART_NAME }}-helm/${{ env.CHART_VERSION }}"
+                  "build": "${{ env.CHART_NAME }}-helm/${{ needs.setup.outputs.chart_version }}"
+
+                },
+                {
+                  "project": "${{ env.JF_PROJECT }}",
+                  "build": "avs-init-container/${{ needs.setup.outputs.chart_version }}"
                 }
               ]
             }' > release-bundle-spec.json
             cat release-bundle-spec.json
-            jf release-bundle-create "${{ env.CHART_NAME }}-helm" "${{ env.CHART_VERSION }}" \
+            jf release-bundle-create "${{ env.CHART_NAME }}-helm" "${{ needs.setup.outputs.chart_version }}" \
               --spec release-bundle-spec.json --project="${{ env.JF_PROJECT }}" --signing-key="aerospike"
