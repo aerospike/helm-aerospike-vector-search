@@ -37,7 +37,7 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       initContainers:
         - name: config-injector
-          image: davi17g/avs-init-container:2.0.0
+          image: davi17g/avs-init-container:3.0.0
           imagePullPolicy: Always
           volumeMounts:
             - name: aerospike-vector-search
@@ -89,9 +89,6 @@ spec:
               {{- $svcPortCounter = add $svcPortCounter 1 }}
               containerPort: {{ $port }}
               protocol: {{ default "TCP" $config.protocol }}
-              {{- if $config.addresses }}
-              addresses: {{ $config.addresses }}
-              {{- end }}
             {{- end }}
           {{- end }}
           {{- if and .Values.aerospikeVectorSearchConfig.manage (not (empty .Values.aerospikeVectorSearchConfig.manage.ports)) }}
@@ -102,9 +99,6 @@ spec:
               {{- $managePortCounter = add $managePortCounter 1 }}
               containerPort: {{ $port }}
               protocol: {{ default "TCP" $config.protocol }}
-              {{- if $config.addresses }}
-              addresses: {{ $config.addresses }}
-              {{- end }}
             {{- end }}
           {{- end }}
           {{- if and .Values.aerospikeVectorSearchConfig.interconnect (not (empty .Values.aerospikeVectorSearchConfig.interconnect.ports)) }}
@@ -115,9 +109,6 @@ spec:
               {{- $interconnectPortCounter = add $interconnectPortCounter 1 }}
               containerPort: {{ $port }}
               protocol: {{ default "TCP" $config.protocol }}
-              {{- if $config.addresses }}
-              addresses: {{ $config.addresses }}
-              {{- end }}
             {{- end }}
           {{- end }}
           volumeMounts:

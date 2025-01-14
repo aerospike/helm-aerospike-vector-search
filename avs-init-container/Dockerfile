@@ -14,7 +14,7 @@ COPY . .
 
 RUN <<-EOF
     xx-go --wrap
-    cd /app/avs-init-container/cmd && OS=${TARGETOS} ARCH=${TARGETARCH} go build -o /app/avs-init-container/target/avs-init-container_${TARGETOS}_${TARGETARCH}
+    cd /app/avs-init-container/cmd && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /app/avs-init-container/target/avs-init-container_${TARGETOS}_${TARGETARCH}
     xx-verify /app/avs-init-container/target/avs-init-container_${TARGETOS}_${TARGETARCH}
 EOF
 

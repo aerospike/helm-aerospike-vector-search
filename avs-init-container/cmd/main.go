@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	AVS_NODE_LABEL_KEY   = "avs-node-label"
+	AVS_NODE_LABEL_KEY   = "aerospike.io/role-label"
 	NODE_ROLES_KEY       = "node-roles"
 	AVS_CONFIG_FILE_PATH = "/etc/aerospike-vector-search/aerospike-vector-search.yml"
 )
@@ -50,6 +50,10 @@ func getAerospikeVectorSearchRoles() (map[string]interface{}, error) {
 		return nil, err
 	}
 
+	if label == "" {
+		return nil, nil
+	}
+
 	aerospikeVectorSearchRolesEnvVariable := os.Getenv("AEROSPIKE_VECTOR_SEARCH_NODE_ROLES")
 	if aerospikeVectorSearchRolesEnvVariable == "" {
 		return nil, nil
@@ -75,6 +79,10 @@ func setRoles(aerospikeVectorSearchConfig map[string]interface{}) error {
 	roles, err := getAerospikeVectorSearchRoles()
 	if err != nil {
 		return err
+	}
+
+	if roles == nil {
+		return nil
 	}
 
 	if cluster, ok := aerospikeVectorSearchConfig["cluster"].(map[string]interface{}); ok {
@@ -143,6 +151,5 @@ func run() int {
 }
 
 func main() {
-	fmt.Println("Starting")
 	os.Exit(run())
 }
