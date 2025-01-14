@@ -3,8 +3,8 @@ group "default" {
 }
 
 target "avs-init-container" {
-  context    = "."                             
-  dockerfile = "./Dockerfile"
+  dockerfile = "./avs-init-container/Dockerfile"
+  context    = "./avs-init-container"
   platforms  = ["linux/amd64", "linux/arm64"]
   tags       = [
   ]
