@@ -20,6 +20,8 @@ env:
 jobs:
   setup:
     runs-on: ubuntu-latest
+    outputs:
+      chart_version: ${{ steps.version.outputs.chart_version }}
     steps:
       - name: Determine Version
         id: version
