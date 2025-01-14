@@ -139,7 +139,7 @@ jobs:
         run: |
           jf docker buildx bake \
             --set avs-init-container.tags=artifact.aerospike.io/${{ env.JF_PROJECT }}-container-dev-local/avs-init-container:${{ env.CHART_VERSION }} \
-            --file docker/asvec.docker/bake.hcl \
+            --file avs-init-container/bake.hcl \
             --push \
             --metadata-file=build-metadata
         env:
