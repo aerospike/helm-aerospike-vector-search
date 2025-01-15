@@ -22,5 +22,4 @@
 *.tmproj
 .vscode/
 kind
-templates/serviceaccount.yaml
 templates/tests/test-connection.yaml
