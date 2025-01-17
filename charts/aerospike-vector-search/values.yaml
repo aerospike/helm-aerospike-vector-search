@@ -13,7 +13,7 @@ image:
 initContainer:
   image:
     repository: artifact.aerospike.io/container/avs-init-container
-    tag: ""  # defaults to chart version           
+    tag: ""  # defaults to chart version
     pullPolicy: IfNotPresent
 
 imagePullSecrets: []
