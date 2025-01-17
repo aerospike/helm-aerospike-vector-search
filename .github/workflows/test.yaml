@@ -35,8 +35,7 @@ jobs:
         run: |
 
           docker build -t avs-init-container:latest  ${{env.WORKSPACE}}/avs-init-container
-          kubectl cluster-info --context kind-chart-testing
-          kind load docker-image avs-init-container:latest
+          kind load docker-image avs-init-container:latest --name chart-testing
 
       - name: Setup Prerequisites
         run: |
