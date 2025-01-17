@@ -61,7 +61,7 @@ jobs:
           kubectl apply -f ${{env.WORKSPACE}}/ci/aerospike.yaml --wait
       - name: Build test init container
         run: |
-          docker build -t avs-init-container:latest -f "${{env.WORKSPACE}}/examples/kind/config/Dockerfile" "${{env.WORKSPACE}}/examples/kind/config"
+          docker build -t avs-init-container:latest  ${{env.WORKSPACE}} avs-init-container
           kind load docker-image avs-init-container:latest
       - name: Setup avs prerequisites
         run: |
