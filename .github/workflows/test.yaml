@@ -30,6 +30,10 @@ jobs:
 
       - name: Create kind cluster
         uses: helm/kind-action@0025e74a8c7512023d06dc019c617aa3cf561fde
+      - name: Build test init container
+        run: |
+          docker build -t avs-init-container:latest  ${{env.WORKSPACE}}/avs-init-container
+          kind load docker-image avs-init-container:latest
 
       - name: Setup Prerequisites
         run: |
@@ -59,10 +63,6 @@ jobs:
           --from-literal=features.conf="$(echo "${{ secrets.FEATURES_CONF }}")"
           
           kubectl apply -f ${{env.WORKSPACE}}/ci/aerospike.yaml --wait
-      - name: Build test init container
-        run: |
-          docker build -t avs-init-container:latest  ${{env.WORKSPACE}} avs-init-container
-          kind load docker-image avs-init-container:latest
       - name: Setup avs prerequisites
         run: |
           echo "Deploy MetalLB"
