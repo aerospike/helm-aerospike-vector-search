@@ -94,5 +94,5 @@ jobs:
         run: |
 
           ct install --namespace aerospike  \
-            --target-branch ${{ github.event.repository.default_branch }} --debug --helm-extra-args="--debug  \
-                  --create-namespace --set initContainer.image.repository=avs-init-container --set initContainer.image.tag=latest"
+            --target-branch ${{ github.event.repository.default_branch }} --debug --helm-extra-args="--debug "\
+            --helm-extra-set-args="--set initContainer.image.repository=avs-init-container --set initContainer.image.tag=latest"     
