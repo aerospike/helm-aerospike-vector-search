@@ -35,6 +35,8 @@ jobs:
         run: |
 
           docker build -t avs-init-container:latest  ${{env.WORKSPACE}}/avs-init-container
+          kubectl cluster-info --context kind-chart-testing
+          kind load docker-image avs-init-container:latest
 
       - name: Setup Prerequisites
         run: |
@@ -88,7 +90,6 @@ jobs:
 
           kubectl apply -f "${{env.WORKSPACE}}/examples/kind/config/gateway.yaml" --wait
           kubectl apply -f "${{env.WORKSPACE}}/examples/kind/config/virtual-service-vector-search.yaml" --wait
-          kind load docker-image avs-init-container:latest
 
       - name: Run chart-testing (install)
         run: |
