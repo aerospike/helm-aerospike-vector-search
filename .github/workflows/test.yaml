@@ -59,7 +59,10 @@ jobs:
           --from-literal=features.conf="$(echo "${{ secrets.FEATURES_CONF }}")"
           
           kubectl apply -f ${{env.WORKSPACE}}/ci/aerospike.yaml --wait
-
+      - name: Build test init container
+        run: |
+          docker build -t avs-init-container:latest -f "${{env.WORKSPACE}}/examples/kind/config/Dockerfile" "${{env.WORKSPACE}}/examples/kind/config"
+          kind load docker-image avs-init-container:latest
       - name: Setup avs prerequisites
         run: |
           echo "Deploy MetalLB"
@@ -88,5 +91,5 @@ jobs:
       - name: Run chart-testing (install)
         run: |
           ct install --namespace aerospike  \
-            --target-branch ${{ github.event.repository.default_branch }} --debug
-
+            --target-branch ${{ github.event.repository.default_branch }} --debug --helm-extra-args="--debug  \
+                  --create-namespace --set initContainer.image.repository=avs-init-container --set initContainer.image.tag=latest"
