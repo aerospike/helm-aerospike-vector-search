@@ -18,7 +18,7 @@ env:
     CHART_NAME: 'aerospike-vector-search'
 jobs:
   setup:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     outputs:
       chart_version: ${{ steps.version.outputs.chart_version }}
     steps:
@@ -47,7 +47,7 @@ jobs:
 
 
       - name: setup GPG
-        uses: aerospike/shared-workflows/devops/setup-gpg@main
+        uses: aerospike/shared-workflows/devops/setup-gpg@ed780e9928d56ef074532dbc6877166d5460587a # v0.1.0
         with:
           gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
           gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
