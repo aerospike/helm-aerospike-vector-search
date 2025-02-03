@@ -6,17 +6,15 @@ aerospikeVectorSearchConfig:
   service:
     metadata-namespace: "avs-meta"
     ports:
-      5500:
-        addresses:
-          "0.0.0.0"
+      5500: { }
   manage:
     ports:
       5040: { }
 
   heartbeat:
     seeds:
-      - address: avs-app-aerospike-vector-search-0
-        port: 5500
+      - address: avs-app-aerospike-vector-search-0.avs-app-aerospike-vector-search.aerospike.svc.cluster.local
+        port: 5001
   interconnect:
     # client-tls-id: interconnect-tls
     ports:
