@@ -4,7 +4,7 @@ aerospikeVectorSearchConfig:
   feature-key-file: "/etc/aerospike-vector-search/features.conf"
   service:
     ports:
-      5000:
+      5050:
         addresses:
           "0.0.0.0"
   manage:
@@ -38,5 +38,5 @@ service:
   type: ClusterIP
   ports:
     - name: "svc-port"
-      port: 5000
-      targetPort: 5000
+      port: 5050
+      targetPort: 5050
