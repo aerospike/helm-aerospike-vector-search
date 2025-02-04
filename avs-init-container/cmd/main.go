@@ -178,7 +178,6 @@ func setAdvertisedListeners(aerospikeVectorSearchConfig map[string]interface{}) 
 	}
 
 	if nodeIP == "" && nodePort == 0 {
-		fmt.Printf("Service was not found!\n")
 		return nil
 	}
 
@@ -304,7 +303,6 @@ func run() int {
 
 	aerospikeVectorSearchConfigEnvVariable := os.Getenv("AEROSPIKE_VECTOR_SEARCH_CONFIG")
 	if aerospikeVectorSearchConfigEnvVariable == "" {
-		fmt.Println("Aerospike Vector Search configuration is empty")
 		return 1
 	}
 
