@@ -9,6 +9,7 @@ import (
 
 	"aerospike.com/avs-init-container/v2/util"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -49,7 +50,7 @@ func GetNodeInstance() (*v1.Node, *v1.Service, error) {
 			instance = &NodeInfoSingleton{
 				node:    nil,
 				service: nil,
-				err:     fmt.Errorf("POD_NAME environment variable is not set"),
+				err:     fmt.Errorf("SERVICE_NAME environment variable is not set"),
 			}
 			return
 		}
@@ -96,18 +97,26 @@ func GetNodeInstance() (*v1.Node, *v1.Service, error) {
 
 		service, err := clientset.CoreV1().Services(podNamespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
 		if err != nil {
+			if errors.IsNotFound(err) {
+				instance = &NodeInfoSingleton{
+					node:    node,
+					service: nil,
+					err:     nil,
+				}
+			} else {
+				instance = &NodeInfoSingleton{
+					node:    nil,
+					service: nil,
+					err:     err,
+				}
+				return
+			}
+		} else {
 			instance = &NodeInfoSingleton{
-				node:    nil,
-				service: nil,
+				node:    node,
+				service: service,
 				err:     err,
 			}
-			return
-		}
-
-		instance = &NodeInfoSingleton{
-			node:    node,
-			service: service,
-			err:     err,
 		}
 	})
 
@@ -121,6 +130,14 @@ func getNodeIp() (string, int32, error) {
 	node, service, err := GetNodeInstance()
 	if err != nil {
 		return "", 0, err
+	}
+
+	if service == nil {
+		return "", 0, nil
+	}
+
+	if service.Spec.Type != v1.ServiceTypeNodePort {
+		return "", 0, nil
 	}
 
 	var nodePort int32 = 0
@@ -159,6 +176,12 @@ func setAdvertisedListeners(aerospikeVectorSearchConfig map[string]interface{}) 
 	if err != nil {
 		return err
 	}
+
+	if nodeIP == "" && nodePort == 0 {
+		fmt.Printf("Service was not found!\n")
+		return nil
+	}
+
 	fmt.Printf("Node IP: %s Port: %d\n", nodeIP, nodePort)
 	service, ok := aerospikeVectorSearchConfig["service"].(map[string]interface{})
 	if !ok {

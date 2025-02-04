@@ -6,29 +6,27 @@ aerospikeVectorSearchConfig:
   service:
     metadata-namespace: "avs-meta"
     ports:
-      5500: { }
+      5000: { }
   manage:
     ports:
       5040: { }
 
   heartbeat:
     seeds:
-      - address: avs-app-aerospike-vector-search-0.avs-app-aerospike-vector-search.aerospike.svc.cluster.local
+      - address: avs-app-aerospike-vector-search-0.avs-app-aerospike-vector-search-internal.aerospike.svc.cluster.local
         port: 5001
   interconnect:
-    # client-tls-id: interconnect-tls
     ports:
       5001:
         addresses:
           "0.0.0.0"
-        # tls-id: interconnect-tls
+
   storage:
     client-policy: {}
     seeds:
       - aerocluster-0-0.aerocluster.aerospike.svc.cluster.local:
           port: 3000
   logging:
-    #    file: /var/log/aerospike-vector-search/aerospike-vector-search.log
     enable-console-logging: false
     format: simple
     max-history: 30
@@ -43,13 +41,12 @@ securityContext:
 image:
   repository: "aerospike/aerospike-vector-search"
   pullPolicy: "IfNotPresent"
-  # Overrides the image tag whose default is the chart appVersion.
   tag: "1.0.0"
 
 initContainer:
   image:
     repository: davi17g/avs-init-container
-    tag: "4.0.3"
+    tag: "4.0.5"
     pullPolicy: Always
 
 aerospikeVectorSearchNodeRoles:
@@ -61,3 +58,12 @@ aerospikeVectorSearchNodeRoles:
 
 serviceAccount:
   create: true
+
+service:
+  enabled: true
+  type: NodePort
+  ports:
+    - name: "svc-5000"
+      port: 5000
+      targetPort: 5000
+      nodePort: 30036
