@@ -14,7 +14,7 @@ spec:
       hosts:
         - "*"
     - port:
-        number: 5000
+        number: 5050
         name: grpc
         protocol: GRPC
       hosts:

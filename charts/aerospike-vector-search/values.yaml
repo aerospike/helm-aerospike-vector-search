@@ -238,13 +238,9 @@ service:
   loadBalancerClass: ""
   externalTrafficPolicy: ""
   sessionAffinity: ""
-  ipFamilyPolicy: SingleStack
-  ipFamilies:
-    - IPv4
-  ports:
-    - name: "svc-port"
-      port: 80
-      targetPort: 5000
+  ipFamilyPolicy: ""
+  ipFamilies: []
+  ports: []
 
 ingress:
   enabled: false

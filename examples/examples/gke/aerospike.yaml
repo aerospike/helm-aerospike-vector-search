@@ -5,11 +5,14 @@ metadata:
   name: aerospike-cluster
   namespace: aerospike
 spec:
-  size: 3
-  image: aerospike/aerospike-server-enterprise:7.0.0.5
+#  aerospikeNetworkPolicy:
+#    access: hostExternal
+  size: 1
+  image: aerospike/aerospike-server-enterprise:7.1.0.6
 
   podSpec:
-    multiPodPerHost: false
+    hostNetwork: false
+#    multiPodPerHost: false
 
   storage:
     filesystemVolumePolicy:

@@ -10,7 +10,7 @@ spec:
     type: RollingUpdate
   podManagementPolicy: Parallel
   replicas: {{ .Values.replicaCount }}
-  serviceName: {{ include "aerospike-vector-search.fullname" . }}
+  serviceName: {{ include "aerospike-vector-search.fullname" . }}-internal
   selector:
     matchLabels:
       {{- include "aerospike-vector-search.selectorLabels" . | nindent 6 }}

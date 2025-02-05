@@ -21,9 +21,9 @@ spec:
     - match:
         - uri:
             prefix: /
-          port: 5000
+          port: 5050
       route:
         - destination:
             port:
-              number: 5000
+              number: 5050
             host: avs-aerospike-vector-search.aerospike.svc.cluster.local
