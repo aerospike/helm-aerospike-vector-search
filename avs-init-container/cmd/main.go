@@ -34,7 +34,6 @@ var (
 	once     sync.Once
 )
 
-// GetNodeInstance returns the node and service objects for the current pod.
 func GetNodeInstance() (*v1.Node, *v1.Service, error) {
 	once.Do(func() {
 		log.Println("Starting GetNodeInstance()")
@@ -42,37 +41,25 @@ func GetNodeInstance() (*v1.Node, *v1.Service, error) {
 		if nodeName == "" {
 			err := fmt.Errorf("NODE_NAME environment variable is not set")
 			log.Println("Error:", err)
-			instance = &NodeInfoSingleton{
-				node:    nil,
-				service: nil,
-				err:     err,
-			}
+			instance = &NodeInfoSingleton{err: err}
 			return
 		}
 		log.Printf("NODE_NAME: %s\n", nodeName)
 
 		serviceName := os.Getenv("SERVICE_NAME")
-		if serviceName == "" { // fixed: should check serviceName instead of nodeName again
+		if serviceName == "" {
 			err := fmt.Errorf("SERVICE_NAME environment variable is not set")
 			log.Println("Error:", err)
-			instance = &NodeInfoSingleton{
-				node:    nil,
-				service: nil,
-				err:     err,
-			}
+			instance = &NodeInfoSingleton{err: err}
 			return
 		}
 		log.Printf("SERVICE_NAME: %s\n", serviceName)
 
 		podNamespace := os.Getenv("POD_NAMESPACE")
-		if podNamespace == "" { // fixed: should check podNamespace
+		if podNamespace == "" {
 			err := fmt.Errorf("POD_NAMESPACE environment variable is not set")
 			log.Println("Error:", err)
-			instance = &NodeInfoSingleton{
-				node:    nil,
-				service: nil,
-				err:     err,
-			}
+			instance = &NodeInfoSingleton{err: err}
 			return
 		}
 		log.Printf("POD_NAMESPACE: %s\n", podNamespace)
@@ -80,11 +67,7 @@ func GetNodeInstance() (*v1.Node, *v1.Service, error) {
 		config, err := rest.InClusterConfig()
 		if err != nil {
 			log.Println("Error getting in-cluster config:", err)
-			instance = &NodeInfoSingleton{
-				node:    nil,
-				service: nil,
-				err:     err,
-			}
+			instance = &NodeInfoSingleton{err: err}
 			return
 		}
 		log.Println("In-cluster config obtained successfully")
@@ -92,58 +75,37 @@ func GetNodeInstance() (*v1.Node, *v1.Service, error) {
 		clientset, err := kubernetes.NewForConfig(config)
 		if err != nil {
 			log.Println("Error creating clientset:", err)
-			instance = &NodeInfoSingleton{
-				node:    nil,
-				service: nil,
-				err:     err,
-			}
+			instance = &NodeInfoSingleton{err: err}
 			return
 		}
 
 		node, err := clientset.CoreV1().Nodes().Get(context.TODO(), nodeName, metav1.GetOptions{})
 		if err != nil {
 			log.Println("Error getting node:", err)
-			instance = &NodeInfoSingleton{
-				node:    nil,
-				service: nil,
-				err:     err,
-			}
+			instance = &NodeInfoSingleton{err: err}
 			return
 		}
-		log.Printf("Fetched node %s\n", nodeName)
+		log.Printf("Fetched node: %s\n", nodeName)
 
 		service, err := clientset.CoreV1().Services(podNamespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
 		if err != nil {
 			if errors.IsNotFound(err) {
 				log.Printf("Service %s not found in namespace %s; proceeding with node only\n", serviceName, podNamespace)
-				instance = &NodeInfoSingleton{
-					node:    node,
-					service: nil,
-					err:     nil,
-				}
+				instance = &NodeInfoSingleton{node: node}
 			} else {
 				log.Println("Error getting service:", err)
-				instance = &NodeInfoSingleton{
-					node:    nil,
-					service: nil,
-					err:     err,
-				}
+				instance = &NodeInfoSingleton{err: err}
 				return
 			}
 		} else {
-			log.Printf("Fetched service %s in namespace %s\n", serviceName, podNamespace)
-			instance = &NodeInfoSingleton{
-				node:    node,
-				service: service,
-				err:     nil,
-			}
+			log.Printf("Fetched service: %s in namespace %s\n", serviceName, podNamespace)
+			instance = &NodeInfoSingleton{node: node, service: service}
 		}
 	})
 
 	return instance.node, instance.service, instance.err
 }
 
-// getNodeIp returns the appropriate IP and node port.
 func getNodeIp() (string, int32, error) {
 	log.Println("Starting getNodeIp()")
 	externalIP, internalIP := "", ""
@@ -154,8 +116,12 @@ func getNodeIp() (string, int32, error) {
 		return "", 0, err
 	}
 
+	for _, addr := range node.Status.Addresses {
+		log.Printf("Node address: Type=%s, Address=%s\n", addr.Type, addr.Address)
+	}
+
 	if service == nil {
-		log.Println("Service is nil, returning empty IP and port")
+		log.Println("Service is nil, skipping advertised listener configuration")
 		return "", 0, nil
 	}
 
@@ -164,7 +130,7 @@ func getNodeIp() (string, int32, error) {
 		return "", 0, nil
 	}
 
-	var nodePort int32 = 0
+	var nodePort int32
 	for _, port := range service.Spec.Ports {
 		if port.NodePort != 0 {
 			nodePort = port.NodePort
@@ -185,20 +151,19 @@ func getNodeIp() (string, int32, error) {
 			externalIP = addr.Address
 		}
 	}
-	log.Printf("Node addresses - External: %s, Internal: %s\n", externalIP, internalIP)
+	log.Printf("Determined node addresses - External: %s, Internal: %s\n", externalIP, internalIP)
 
 	if externalIP != "" {
 		return externalIP, nodePort, nil
 	}
-
 	if internalIP != "" {
 		return internalIP, nodePort, nil
 	}
 
+	log.Println("No valid IP found for node")
 	return "", 0, nil
 }
 
-// setAdvertisedListeners updates the configuration with the node IP and port.
 func setAdvertisedListeners(aerospikeVectorSearchConfig map[string]interface{}) error {
 	log.Println("Starting setAdvertisedListeners()")
 	nodeIP, nodePort, err := getNodeIp()
@@ -214,16 +179,16 @@ func setAdvertisedListeners(aerospikeVectorSearchConfig map[string]interface{}) 
 
 	log.Printf("Setting advertised listeners to Node IP: %s, Port: %d\n", nodeIP, nodePort)
 
-	service, ok := aerospikeVectorSearchConfig["service"].(map[string]interface{})
+	serviceConfig, ok := aerospikeVectorSearchConfig["service"].(map[string]interface{})
 	if !ok {
-		err := fmt.Errorf("was not able to get service from config")
+		err := fmt.Errorf("was not able to get service configuration")
 		log.Println("Error:", err)
 		return err
 	}
 
-	ports, ok := service["ports"].(map[string]interface{})
+	ports, ok := serviceConfig["ports"].(map[string]interface{})
 	if !ok {
-		err := fmt.Errorf("was not able to get service.ports from config")
+		err := fmt.Errorf("was not able to get service.ports configuration")
 		log.Println("Error:", err)
 		return err
 	}
@@ -244,10 +209,18 @@ func setAdvertisedListeners(aerospikeVectorSearchConfig map[string]interface{}) 
 			},
 		}
 	}
+
+	// Log the updated ports config or .
+	updatedPorts, err := json.MarshalIndent(ports, "", "  ")
+	if err == nil {
+		log.Printf("Updated ports configuration: %s\n", string(updatedPorts))
+	} else {
+		log.Println("Error marshalling updated ports config:", err)
+	}
+
 	return nil
 }
 
-// getNodeLabels returns the label value for the node.
 func getNodeLabels() (string, error) {
 	log.Println("Starting getNodeLabels()")
 	node, _, err := GetNodeInstance()
@@ -260,11 +233,11 @@ func getNodeLabels() (string, error) {
 		log.Printf("Found node label: %s=%s\n", AVS_NODE_LABEL_KEY, label)
 		return label, nil
 	}
+
 	log.Printf("Node label %s not found\n", AVS_NODE_LABEL_KEY)
 	return "", nil
 }
 
-// getAerospikeVectorSearchRoles returns the node roles from the environment variable.
 func getAerospikeVectorSearchRoles() (map[string]interface{}, error) {
 	log.Println("Starting getAerospikeVectorSearchRoles()")
 	label, err := getNodeLabels()
@@ -278,31 +251,28 @@ func getAerospikeVectorSearchRoles() (map[string]interface{}, error) {
 		return nil, nil
 	}
 
-	aerospikeVectorSearchRolesEnvVariable := os.Getenv("AEROSPIKE_VECTOR_SEARCH_NODE_ROLES")
-	if aerospikeVectorSearchRolesEnvVariable == "" {
-		log.Println("AEROSPIKE_VECTOR_SEARCH_NODE_ROLES env variable not set; skipping roles")
+	envRoles := os.Getenv("AEROSPIKE_VECTOR_SEARCH_NODE_ROLES")
+	if envRoles == "" {
+		log.Println("AEROSPIKE_VECTOR_SEARCH_NODE_ROLES environment variable not set; skipping roles")
 		return nil, nil
 	}
 
-	var aerospikeVectorSearchRoles map[string]interface{}
-	err = json.Unmarshal([]byte(aerospikeVectorSearchRolesEnvVariable), &aerospikeVectorSearchRoles)
+	var roles map[string]interface{}
+	err = json.Unmarshal([]byte(envRoles), &roles)
 	if err != nil {
 		log.Println("Error unmarshalling AEROSPIKE_VECTOR_SEARCH_NODE_ROLES:", err)
 		return nil, err
 	}
 
-	if role, ok := aerospikeVectorSearchRoles[label]; ok {
-		log.Printf("Found role for label %s\n", label)
-		retval := make(map[string]interface{})
-		retval[NODE_ROLES_KEY] = role
-		return retval, nil
+	if role, ok := roles[label]; ok {
+		log.Printf("Found role for label %s: %v\n", label, role)
+		return map[string]interface{}{NODE_ROLES_KEY: role}, nil
 	}
 
 	log.Printf("No role found for label %s\n", label)
 	return nil, nil
 }
 
-// setRoles updates the cluster configuration with the node roles.
 func setRoles(aerospikeVectorSearchConfig map[string]interface{}) error {
 	log.Println("Starting setRoles()")
 	roles, err := getAerospikeVectorSearchRoles()
@@ -312,31 +282,33 @@ func setRoles(aerospikeVectorSearchConfig map[string]interface{}) error {
 	}
 
 	if roles == nil {
-		log.Println("No roles to set; skipping")
+		log.Println("No roles found; nothing to set")
 		return nil
 	}
 
-	if cluster, ok := aerospikeVectorSearchConfig["cluster"].(map[string]interface{}); ok {
-		cluster[NODE_ROLES_KEY] = roles[NODE_ROLES_KEY]
-		aerospikeVectorSearchConfig["cluster"] = cluster
-		log.Println("Successfully set roles in cluster config")
-	} else {
-		err := fmt.Errorf("was not able to get cluster from config")
+	cluster, ok := aerospikeVectorSearchConfig["cluster"].(map[string]interface{})
+	if !ok {
+		err := fmt.Errorf("was not able to get cluster configuration")
 		log.Println("Error:", err)
 		return err
 	}
 
+	cluster[NODE_ROLES_KEY] = roles[NODE_ROLES_KEY]
+	aerospikeVectorSearchConfig["cluster"] = cluster
+	log.Println("Successfully set roles in cluster configuration")
 	return nil
 }
 
-// writeConfig writes the updated configuration to a file.
 func writeConfig(aerospikeVectorSearchConfig map[string]interface{}) error {
 	log.Println("Starting writeConfig()")
-	config, err := yaml.Marshal(aerospikeVectorSearchConfig)
+	configBytes, err := yaml.Marshal(aerospikeVectorSearchConfig)
 	if err != nil {
 		log.Println("Error marshalling config to YAML:", err)
 		return err
 	}
+
+	// Log the final config for debugging purposes.
+	log.Printf("Final configuration:\n%s\n", string(configBytes))
 
 	file, err := os.Create(AVS_CONFIG_FILE_PATH)
 	if err != nil {
@@ -348,7 +320,7 @@ func writeConfig(aerospikeVectorSearchConfig map[string]interface{}) error {
 			log.Println("Error closing config file:", cerr)
 		}
 	}()
-	_, err = file.Write(config)
+	_, err = file.Write(configBytes)
 	if err != nil {
 		log.Println("Error writing config file:", err)
 		return err
@@ -358,22 +330,25 @@ func writeConfig(aerospikeVectorSearchConfig map[string]interface{}) error {
 	return nil
 }
 
-// run is the main logic of the init container.
 func run() int {
 	log.Println("Init container started")
 
-	aerospikeVectorSearchConfigEnvVariable := os.Getenv("AEROSPIKE_VECTOR_SEARCH_CONFIG")
-	if aerospikeVectorSearchConfigEnvVariable == "" {
+	configEnv := os.Getenv("AEROSPIKE_VECTOR_SEARCH_CONFIG")
+	if configEnv == "" {
 		log.Println("AEROSPIKE_VECTOR_SEARCH_CONFIG environment variable is not set")
 		return 1
 	}
 
 	var aerospikeVectorSearchConfig map[string]interface{}
-	err := json.Unmarshal([]byte(aerospikeVectorSearchConfigEnvVariable), &aerospikeVectorSearchConfig)
+	err := json.Unmarshal([]byte(configEnv), &aerospikeVectorSearchConfig)
 	if err != nil {
 		log.Println("Error unmarshalling AEROSPIKE_VECTOR_SEARCH_CONFIG:", err)
 		return util.ToExitVal(err)
 	}
+
+	// Log the incoming configuration for reference.
+	configDump, _ := json.MarshalIndent(aerospikeVectorSearchConfig, "", "  ")
+	log.Printf("Initial configuration:\n%s\n", string(configDump))
 
 	err = setRoles(aerospikeVectorSearchConfig)
 	if err != nil {
