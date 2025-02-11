@@ -10,9 +10,16 @@ image:
   # Overrides the image tag whose default is the chart appVersion.
   tag: "1.0.0"
 
+initContainer:
+  image:
+    repository: artifact.aerospike.io/container/avs-init-container
+    tag: ""  # defaults to chart version
+    pullPolicy: IfNotPresent
+
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
+aerospikeVectorSearchNodeRoles: {}
 
 aerospikeVectorSearchConfig:
   # Optional: service ports configuration
@@ -231,13 +238,9 @@ service:
   loadBalancerClass: ""
   externalTrafficPolicy: ""
   sessionAffinity: ""
-  ipFamilyPolicy: SingleStack
-  ipFamilies:
-    - IPv4
-  ports:
-    - name: "svc-port"
-      port: 80
-      targetPort: 5000
+  ipFamilyPolicy: ""
+  ipFamilies: []
+  ports: []
 
 ingress:
   enabled: false

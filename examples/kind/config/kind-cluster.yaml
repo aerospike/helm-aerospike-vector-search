@@ -12,6 +12,6 @@ nodes:
       - containerPort: 15021
         hostPort: 15021
         protocol: TCP
-      - containerPort: 5000
-        hostPort: 5000
+      - containerPort: 5050
+        hostPort: 5050
         protocol: TCP

@@ -13,14 +13,14 @@ if [ -z "$ZONE" ]; then
     exit 1
 fi
 
-if [ ! -f "$WORKSPACE/aerospike-vector-search/gke/config/features.conf" ]; then
+if [ ! -f "$WORKSPACE/examples/gke/config/features.conf" ]; then
   echo "features.conf Not found"
   exit 1
 fi
 
 echo "Install GKE"
 gcloud config set project "$PROJECT"
-gcloud container clusters create avs-gke-cluster \
+gcloud container clusters create avs-gke-cluster-david \
 --zone "$ZONE" \
 --project "$PROJECT" \
 --num-nodes 3 \
@@ -29,8 +29,8 @@ gcloud container clusters get-credentials avs-gke-cluster --zone="$ZONE"
 
 sleep 60
 echo "Deploying AKO"
-curl -sL https://github.com/operator-framework/operator-lifecycle-manager/releases/download/v0.25.0/install.sh \
-| bash -s v0.25.0
+curl -sL https://github.com/operator-framework/operator-lifecycle-manager/releases/download/v0.31.0/install.sh | \
+bash -s v0.31.0
 kubectl create -f https://operatorhub.io/install/aerospike-kubernetes-operator.yaml
 echo "Waiting for AKO"
 while true; do
@@ -49,7 +49,7 @@ kubectl create clusterrolebinding aerospike-cluster \
 
 echo "Set Secrets for Aerospike Cluster"
 kubectl --namespace aerospike create secret generic aerospike-secret \
---from-file=features.conf="$WORKSPACE/aerospike-vector-search/gke/config/features.conf"
+--from-file=features.conf="$WORKSPACE/examples/gke/config/features.conf"
 kubectl --namespace aerospike create secret generic auth-secret --from-literal=password='admin123'
 
 echo "Add Storage Class"
@@ -57,7 +57,7 @@ kubectl apply -f https://raw.githubusercontent.com/aerospike/aerospike-kubernete
 
 sleep 5
 echo "Deploy Aerospike Cluster"
-kubectl apply -f "$WORKSPACE/aerospike-vector-search/examples/gke/aerospike.yaml"
+kubectl apply -f "$WORKSPACE/examples/examples/gke/aerospike.yaml"
 
 sleep 5
 echo "Waiting for Aerospike Cluster"
@@ -69,38 +69,43 @@ while true; do
   fi
 done
 
-echo "Deploying Istio"
-helm repo add istio https://istio-release.storage.googleapis.com/charts
-helm repo update
-
-helm install istio-base istio/base --namespace istio-system --set defaultRevision=default --create-namespace --wait
-helm install istiod istio/istiod --namespace istio-system --create-namespace --wait
-helm install istio-ingress istio/gateway \
---values "$WORKSPACE/aerospike-vector-search/gke/config/istio-ingressgateway-values.yaml" \
---namespace istio-ingress \
---create-namespace \
---wait
-
-kubectl apply -f "$WORKSPACE/aerospike-vector-search/gke/config/gateway.yaml"
-kubectl apply -f "$WORKSPACE/aerospike-vector-search/gke/config/virtual-service-vector-search.yaml"
-
+sleep 30
 echo "Deploy AVS"
-helm install avs-gke "$WORKSPACE/aerospike-vector-search" \
---values "$WORKSPACE/aerospike-vector-search/examples/gke/avs-gke-values.yaml" --namespace aerospike --wait
+helm install avs-app "$WORKSPACE/charts/aerospike-vector-search" \
+--values "$WORKSPACE/avs-init-container/avs-kind-values.yaml" --namespace aerospike
 
-echo "Deploying Quote-Search"
-
-git clone \
---depth 1 \
---branch main \
---no-checkout https://github.com/aerospike/aerospike-vector-search-examples.git
-cd aerospike-vector-search-examples
-git sparse-checkout set kubernetes/helm/quote-semantic-search
-git checkout main
-cd -
-
-helm install quote-search "$PWD/aerospike-vector-search-examples/kubernetes/helm/quote-semantic-search" \
---values "$WORKSPACE/aerospike-vector-search/gke/config/quote-search-gke-values.yaml" \
---namespace aerospike \
---wait \
---timeout 7m0s
+#echo "Deploying Istio"
+#helm repo add istio https://istio-release.storage.googleapis.com/charts
+#helm repo update
+#
+#helm install istio-base istio/base --namespace istio-system --set defaultRevision=default --create-namespace --wait
+#helm install istiod istio/istiod --namespace istio-system --create-namespace --wait
+#helm install istio-ingress istio/gateway \
+#--values "$WORKSPACE/examples/gke/config/istio-ingressgateway-values.yaml" \
+#--namespace istio-ingress \
+#--create-namespace \
+#--wait
+#
+#kubectl apply -f "$WORKSPACE/examples/gke/config/gateway.yaml"
+#kubectl apply -f "$WORKSPACE/examples/gke/config/virtual-service-vector-search.yaml"
+#
+#echo "Deploy AVS"
+#helm install avs-gke "$WORKSPACE/aerospike-vector-search" \
+#--values "$WORKSPACE/examples/examples/gke/avs-gke-values.yaml" --namespace aerospike --wait
+#
+#echo "Deploying Quote-Search"
+#
+#git clone \
+#--depth 1 \
+#--branch main \
+#--no-checkout https://github.com/aerospike/aerospike-vector-search-examples.git
+#cd aerospike-vector-search-examples
+#git sparse-checkout set kubernetes/helm/quote-semantic-search
+#git checkout main
+#cd -
+#
+#helm install quote-search "$PWD/aerospike-vector-search-examples/kubernetes/helm/quote-semantic-search" \
+#--values "$WORKSPACE/examples/gke/config/quote-search-gke-values.yaml" \
+#--namespace aerospike \
+#--wait \
+#--timeout 7m0s

@@ -5,8 +5,8 @@ metadata:
   name: {{ include "aerospike-vector-search.serviceAccountName" . }}
 rules:
   - apiGroups: [""]
-    resources: ["nodes"]
-    verbs: ["get"]
+    resources: ["nodes", "services", "pods"]
+    verbs: ["get", "list"]
 
 ---
 kind: ClusterRoleBinding

@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -20,16 +20,22 @@ jobs:
         with:
           version: latest
 
-      - uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b
+      - uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38
         with:
           python-version: '3.x'
           check-latest: true
 
       - name: Set up chart-testing
-        uses: helm/chart-testing-action@e6669bcd63d7cb57cb4380c33043eebe5d111992
+        uses: helm/chart-testing-action@0d28d3144d3a25ea2cc349d6e59901c4ff469b3b
 
       - name: Create kind cluster
-        uses: helm/kind-action@0025e74a8c7512023d06dc019c617aa3cf561fde
+        uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3
+
+      - name: Build test init container
+        run: |
+
+          docker build -t avs-init-container:latest  ${{env.WORKSPACE}}/avs-init-container
+          kind load docker-image avs-init-container:latest --name chart-testing
 
       - name: Setup Prerequisites
         run: |
@@ -59,7 +65,6 @@ jobs:
           --from-literal=features.conf="$(echo "${{ secrets.FEATURES_CONF }}")"
           
           kubectl apply -f ${{env.WORKSPACE}}/ci/aerospike.yaml --wait
-
       - name: Setup avs prerequisites
         run: |
           echo "Deploy MetalLB"
@@ -87,6 +92,7 @@ jobs:
 
       - name: Run chart-testing (install)
         run: |
-          ct install --namespace aerospike  \
-            --target-branch ${{ github.event.repository.default_branch }} --debug
 
+          ct install --namespace aerospike  \
+            --target-branch ${{ github.event.repository.default_branch }} --debug --helm-extra-args="--debug "\
+            --helm-extra-set-args="--set initContainer.image.repository=avs-init-container --set initContainer.image.tag=latest"     
