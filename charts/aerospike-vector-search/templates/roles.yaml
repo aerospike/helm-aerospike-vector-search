@@ -1,3 +1,4 @@
+{{- if and .Values.rbac.create  -}}
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1
@@ -7,7 +8,9 @@ rules:
   - apiGroups: [""]
     resources: ["nodes", "services", "pods"]
     verbs: ["get", "list"]
+{{- end }}
 
+{{- if and .Values.rbac.create  -}}
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
@@ -25,3 +28,4 @@ subjects:
     name: default
     {{- end }}
     namespace: {{ .Release.Namespace }}
+{{- end }}
