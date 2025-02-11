@@ -1,15 +1,17 @@
 package main
 
 import (
-	"aerospike.com/avs-init-container/v2/util"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 
 	"aerospike.com/avs-init-container/v2/util"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -477,7 +479,13 @@ func run() int {
 		return util.ToExitVal(err)
 	}
 
-	err = writeConfig(aerospikeVectorSearchConfig)
+	err = setHeartbeatSeeds(aerospikeVectorSearchConfig)
+	if err != nil {
+		log.Println("Error setting seed list:", err)
+		return util.ToExitVal(err)
+	}
+
+	err = writeConfigFile(aerospikeVectorSearchConfig)
 	if err != nil {
 		log.Println("Error writing config:", err)
 		return util.ToExitVal(err)
