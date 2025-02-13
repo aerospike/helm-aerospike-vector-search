@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 
 	"aerospike.com/avs-init-container/v2/util"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -299,7 +302,120 @@ func setRoles(aerospikeVectorSearchConfig map[string]interface{}) error {
 	return nil
 }
 
-func writeConfig(aerospikeVectorSearchConfig map[string]interface{}) error {
+func getHeartbeatSeeds(aerospikeVectorSearchConfig map[string]interface{}) (map[string]string, error) {
+
+	heartbeat, ok := aerospikeVectorSearchConfig["heartbeat"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("Failed to retrieve heartbeat section")
+	}
+
+	heartbeatSeedList, ok := heartbeat["seeds"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("Failed to retrieve heartbeat seed list")
+	}
+
+	if len(heartbeatSeedList) == 0 {
+		return nil, fmt.Errorf("Heartbeat seed list is empty")
+	}
+
+	heartbeatSeed, ok := heartbeatSeedList[0].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("Failed to retrieve heartbeat seed list element")
+	}
+
+	heartbeatSeedDnsName, ok := heartbeatSeed["address"]
+	if !ok {
+		return nil, fmt.Errorf("Failed to retrieve heartbeat seed DNS name")
+	}
+
+	heartbeatSeedPort, ok := heartbeatSeed["port"]
+	if !ok {
+		return nil, fmt.Errorf("Failed to retrieve heartbeat seed port number")
+	}
+
+	return map[string]string{
+		"address": fmt.Sprintf("%v", heartbeatSeedDnsName),
+		"port":    fmt.Sprintf("%v", heartbeatSeedPort),
+	}, nil
+}
+
+func getDnsNameFormat(heartbeatSeedDnsName string) (string, string, error) {
+
+	heartbeatSeedDnsNameParts := strings.Split(heartbeatSeedDnsName, ".")
+	pod_name := heartbeatSeedDnsNameParts[0][0 : len(heartbeatSeedDnsNameParts[0])-2]
+
+	switch len(heartbeatSeedDnsNameParts) {
+	case 2:
+
+		return pod_name, "%s-%d" + "." + heartbeatSeedDnsNameParts[1], nil
+	case 6:
+		if heartbeatSeedDnsNameParts[3] == "svc" && heartbeatSeedDnsNameParts[4] == "cluster" && heartbeatSeedDnsNameParts[5] == "local" {
+			heartbeatSeedDnsNameFormat := fmt.Sprintf(
+				"%s.%s.%s.%s.%s",
+				heartbeatSeedDnsNameParts[1],
+				heartbeatSeedDnsNameParts[2],
+				heartbeatSeedDnsNameParts[3],
+				heartbeatSeedDnsNameParts[4],
+				heartbeatSeedDnsNameParts[5],
+			)
+
+			return pod_name, "%s-%d" + "." + heartbeatSeedDnsNameFormat, nil
+		}
+	}
+
+	return "", "", fmt.Errorf("Invalid DNS name format")
+}
+
+func generateHeartbeatSeedsDnsNames(aerospikeVectorSearchConfig map[string]interface{}) ([]map[string]string, error) {
+
+	replicasEnvVariable := os.Getenv("REPLICAS")
+	if replicasEnvVariable == "" {
+		return nil, fmt.Errorf("REPLICAS env variable is empty")
+	}
+
+	replicas, err := strconv.Atoi(replicasEnvVariable)
+	if err != nil {
+		return nil, err
+	}
+
+	heartbeatSeeds, err := getHeartbeatSeeds(aerospikeVectorSearchConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	pod_name, heartbeatSeedDnsNameFormat, err := getDnsNameFormat(heartbeatSeeds["address"])
+	if err != nil {
+		return nil, err
+	}
+
+	heartbeatSeedDnsNames := make([]map[string]string, replicas, replicas)
+
+	for i := 0; i < replicas; i++ {
+		heartbeatSeedDnsNames[i] = map[string]string{
+			"address": fmt.Sprintf(heartbeatSeedDnsNameFormat, pod_name, i),
+			"port":    heartbeatSeeds["port"],
+		}
+	}
+
+	return heartbeatSeedDnsNames, nil
+}
+
+func setHeartbeatSeeds(aerospikeVectorSearchConfig map[string]interface{}) error {
+
+	heartbeatSeedDnsNames, err := generateHeartbeatSeedsDnsNames(aerospikeVectorSearchConfig)
+	if err != nil {
+		return err
+	}
+
+	if heartbeat, ok := aerospikeVectorSearchConfig["heartbeat"].(map[string]interface{}); ok {
+		heartbeat["seeds"] = heartbeatSeedDnsNames
+	}
+
+	return nil
+}
+
+func writeConfigFile(aerospikeVectorSearchConfig map[string]interface{}) error {
+
 	log.Println("Starting writeConfig()")
 	configBytes, err := yaml.Marshal(aerospikeVectorSearchConfig)
 	if err != nil {
@@ -320,6 +436,7 @@ func writeConfig(aerospikeVectorSearchConfig map[string]interface{}) error {
 			log.Println("Error closing config file:", cerr)
 		}
 	}()
+
 	_, err = file.Write(configBytes)
 	if err != nil {
 		log.Println("Error writing config file:", err)
@@ -362,7 +479,13 @@ func run() int {
 		return util.ToExitVal(err)
 	}
 
-	err = writeConfig(aerospikeVectorSearchConfig)
+	err = setHeartbeatSeeds(aerospikeVectorSearchConfig)
+	if err != nil {
+		log.Println("Error setting seed list:", err)
+		return util.ToExitVal(err)
+	}
+
+	err = writeConfigFile(aerospikeVectorSearchConfig)
 	if err != nil {
 		log.Println("Error writing config:", err)
 		return util.ToExitVal(err)
