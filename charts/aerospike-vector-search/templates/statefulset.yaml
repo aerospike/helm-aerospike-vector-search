@@ -56,6 +56,8 @@ spec:
             - name: aerospike-vector-search
               mountPath: /etc/aerospike-vector-search
           env:
+            - name: NETWORK_MODE
+              value: {{ if .Values.multipodPerHost }}{{ quote "nodeport" }}{{ else }}{{ quote "hostnetwork" }}{{ end }}
             - name: CONTAINER_PORT
               value:  {{ default "5000" (keys .Values.aerospikeVectorSearchConfig.service.ports | first) | quote }}
             - name: NODE_NAME

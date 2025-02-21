@@ -36,7 +36,6 @@ const (
 	NetworkModeHostNetwork NetworkMode = "hostnetwork"
 )
 
-
 var (
 	instance *NodeInfoSingleton
 	once     sync.Once
@@ -44,15 +43,17 @@ var (
 
 func getEndpointByMode() (string, int32, error) {
 	// Default to nodeport if NETWORK_MODE is not set.
-	// We will try to get the nodeport from the service if it is a NodePort service. 
+	// We will try to get the nodeport from the service if it is a NodePort service.
 	// Otherwise, we will default to internal networking.
-	// If NETWORK_MODE is set to hostnetwork, we will use the CONTAINER_PORT environment 
+	// If NETWORK_MODE is set to hostnetwork, we will use the CONTAINER_PORT environment
 	// variable to get the port.
 	modeStr := os.Getenv("NETWORK_MODE")
+	var networkMode NetworkMode
 	if modeStr == "" {
-		modeStr = "nodeport"
+		networkMode = NetworkModeNodePort
+	} else {
+		networkMode = NetworkMode(modeStr)
 	}
-	networkMode := NetworkMode(modeStr)
 	log.Printf("Operating in NETWORK_MODE: %s", networkMode)
 
 	node, service, err := GetNodeInstance()
@@ -109,14 +110,14 @@ func getEndpointByMode() (string, int32, error) {
 		if err != nil {
 			return "", 0, fmt.Errorf("invalid CONTAINER_PORT value: %s", containerPortStr)
 		}
+		log.Println("CONTAINER_PORT:", containerPortStr, "for hostnetwork mode")
+
 		return nodeIP, int32(containerPort), nil
 
 	default:
 		return "", 0, fmt.Errorf("unsupported NETWORK_MODE: %s", networkMode)
 	}
 }
-
-
 
 func GetNodeInstance() (*v1.Node, *v1.Service, error) {
 	once.Do(func() {
@@ -189,7 +190,6 @@ func GetNodeInstance() (*v1.Node, *v1.Service, error) {
 
 	return instance.node, instance.service, instance.err
 }
-
 
 func setAdvertisedListeners(aerospikeVectorSearchConfig map[string]interface{}) error {
 	log.Println("Starting setAdvertisedListeners()")

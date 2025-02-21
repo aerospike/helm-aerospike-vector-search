@@ -1,7 +1,9 @@
+fullnameOverride: avs-app
 aerospikeVectorSearchConfig:
   cluster:
     cluster-name: "avs-db-1"
   feature-key-file: "/etc/aerospike-vector-search/secrets/features.conf"  # Sharing secret with aerospike.
+
   service:
     ports:
       5000:
@@ -29,14 +31,15 @@ aerospikeVectorSearchConfig:
       root: info
     ticker-interval: 10
 
+service:
+  enabled: true
+  type: NodePort
+  externalTrafficPolicy: Local 
+  ports:
+    - name: "svc-5000"
+      port: 5000
+      targetPort: 5000
+      nodePort: 30036
 securityContext:
   allowPrivilegeEscalation: false
   runAsUser: 0
-
-service:
-  enabled: false
-  type: ClusterIP
-  ports:
-    - name: "svc-port"
-      port: 5000
-      targetPort: 5000
