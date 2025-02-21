@@ -110,6 +110,9 @@ func getEndpointByMode() (string, int32, error) {
 		if err != nil {
 			return "", 0, fmt.Errorf("invalid CONTAINER_PORT value: %s", containerPortStr)
 		}
+		if containerPort < 0 || containerPort > 65535 {
+			return "", 0, fmt.Errorf("CONTAINER_PORT value out of range: %d", containerPort)
+		}
 		log.Println("CONTAINER_PORT:", containerPortStr, "for hostnetwork mode")
 
 		return nodeIP, int32(containerPort), nil

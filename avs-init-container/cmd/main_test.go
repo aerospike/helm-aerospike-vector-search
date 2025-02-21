@@ -1,78 +1,177 @@
 package main
 
 import (
-	"reflect"
+	"os"
 	"testing"
 
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-func TestGetNodeInstance(t *testing.T) {
-	tests := []struct {
-		name    string
-		want    *v1.Node
-		want1   *v1.Service
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, got1, err := GetNodeInstance()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("GetNodeInstance() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("GetNodeInstance() got = %v, want %v", got, tt.want)
-			}
-			if !reflect.DeepEqual(got1, tt.want1) {
-				t.Errorf("GetNodeInstance() got1 = %v, want %v", got1, tt.want1)
-			}
-		})
-	}
-}
 
 func Test_getEndpointByMode(t *testing.T) {
 	tests := []struct {
-		name    string
-		want    string
-		want1   int32
-		wantErr bool
+		name          string
+		networkMode   string
+		containerPort string
+		node          *v1.Node
+		service       *v1.Service
+		wantIP        string
+		wantPort      int32
+		wantErr       bool
 	}{
-		// TODO: Add test cases.
+		{
+			name:        "NodePort mode with valid external IP and NodePort",
+			networkMode: "nodeport",
+			node: &v1.Node{
+				Status: v1.NodeStatus{
+					Addresses: []v1.NodeAddress{
+						{Type: v1.NodeExternalIP, Address: "192.168.1.1"},
+					},
+				},
+			},
+			service: &v1.Service{
+				Spec: v1.ServiceSpec{
+					Type: v1.ServiceTypeNodePort,
+					Ports: []v1.ServicePort{
+						{NodePort: 30000},
+					},
+				},
+			},
+			wantIP:   "192.168.1.1",
+			wantPort: 30000,
+			wantErr:  false,
+		},
+		{
+			name:        "NodePort mode with valid internal IP and NodePort",
+			networkMode: "nodeport",
+			node: &v1.Node{
+				Status: v1.NodeStatus{
+					Addresses: []v1.NodeAddress{
+						{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+					},
+				},
+			},
+			service: &v1.Service{
+				Spec: v1.ServiceSpec{
+					Type: v1.ServiceTypeNodePort,
+					Ports: []v1.ServicePort{
+						{NodePort: 30000},
+					},
+				},
+			},
+			wantIP:   "10.0.0.1",
+			wantPort: 30000,
+			wantErr:  false,
+		},
+		{
+			name:          "HostNetwork mode with valid container port",
+			networkMode:   "hostnetwork",
+			containerPort: "8080",
+			node: &v1.Node{
+				Status: v1.NodeStatus{
+					Addresses: []v1.NodeAddress{
+						{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+					},
+				},
+			},
+			wantIP:   "10.0.0.1",
+			wantPort: 8080,
+			wantErr:  false,
+		},
+		{
+			name:          "HostNetwork mode with invalid container port",
+			networkMode:   "hostnetwork",
+			containerPort: "invalid",
+			node: &v1.Node{
+				Status: v1.NodeStatus{
+					Addresses: []v1.NodeAddress{
+						{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+					},
+				},
+			},
+			wantIP:   "",
+			wantPort: 0,
+			wantErr:  true,
+		},
+		{
+			name:        "Unsupported network mode",
+			networkMode: "unsupported",
+			node: &v1.Node{
+				Status: v1.NodeStatus{
+					Addresses: []v1.NodeAddress{
+						{Type: v1.NodeInternalIP, Address: "10.0.0.1"},
+					},
+				},
+			},
+			wantIP:   "",
+			wantPort: 0,
+			wantErr:  true,
+		},
+		{
+			name:        "No valid node IP found",
+			networkMode: "nodeport",
+			node: &v1.Node{
+				Status: v1.NodeStatus{
+					Addresses: []v1.NodeAddress{},
+				},
+			},
+			wantIP:   "",
+			wantPort: 0,
+			wantErr:  true,
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1, err := getEndpointByMode()
+			os.Setenv("NETWORK_MODE", tt.networkMode)
+			os.Setenv("CONTAINER_PORT", tt.containerPort)
+			instance = &NodeInfoSingleton{node: tt.node, service: tt.service}
+
+			gotIP, gotPort, err := getEndpointByMode()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("getEndpointByMode() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if got != tt.want {
-				t.Errorf("getEndpointByMode() got = %v, want %v", got, tt.want)
+			if gotIP != tt.wantIP {
+				t.Errorf("getEndpointByMode() gotIP = %v, want %v", gotIP, tt.wantIP)
 			}
-			if got1 != tt.want1 {
-				t.Errorf("getEndpointByMode() got1 = %v, want %v", got1, tt.want1)
+			if gotPort != tt.wantPort {
+				t.Errorf("getEndpointByMode() gotPort = %v, want %v", gotPort, tt.wantPort)
 			}
 		})
 	}
 }
 
 func Test_setAdvertisedListeners(t *testing.T) {
-	type args struct {
-		aerospikeVectorSearchConfig map[string]interface{}
-	}
 	tests := []struct {
 		name    string
-		args    args
+		config  map[string]interface{}
 		wantErr bool
 	}{
-		// TODO: Add test cases.
+		{
+			name: "Valid configuration",
+			config: map[string]interface{}{
+				"service": map[string]interface{}{
+					"ports": map[string]interface{}{
+						"http": map[string]interface{}{
+							"port": 8080,
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "Invalid configuration",
+			config:  map[string]interface{}{},
+			wantErr: true,
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := setAdvertisedListeners(tt.args.aerospikeVectorSearchConfig); (err != nil) != tt.wantErr {
+			err := setAdvertisedListeners(tt.config)
+			if (err != nil) != tt.wantErr {
 				t.Errorf("setAdvertisedListeners() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -82,61 +181,86 @@ func Test_setAdvertisedListeners(t *testing.T) {
 func Test_getNodeLabels(t *testing.T) {
 	tests := []struct {
 		name    string
+		node    *v1.Node
 		want    string
 		wantErr bool
 	}{
-		// TODO: Add test cases.
+		{
+			name: "Node with label",
+			node: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						AVS_NODE_LABEL_KEY: "test-label",
+					},
+				},
+			},
+			want:    "test-label",
+			wantErr: false,
+		},
+		{
+			name: "Node without label",
+			node: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{},
+				},
+			},
+			want:    "",
+			wantErr: false,
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			instance = &NodeInfoSingleton{node: tt.node}
 			got, err := getNodeLabels()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("getNodeLabels() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if got != tt.want {
-				t.Errorf("getNodeLabels() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func Test_getAerospikeVectorSearchRoles(t *testing.T) {
-	tests := []struct {
-		name    string
-		want    map[string]interface{}
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := getAerospikeVectorSearchRoles()
-			if (err != nil) != tt.wantErr {
-				t.Errorf("getAerospikeVectorSearchRoles() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("getAerospikeVectorSearchRoles() = %v, want %v", got, tt.want)
+				t.Errorf("getNodeLabels() got = %v, want %v", got, tt.want)
 			}
 		})
 	}
 }
 
 func Test_setRoles(t *testing.T) {
-	type args struct {
-		aerospikeVectorSearchConfig map[string]interface{}
-	}
 	tests := []struct {
 		name    string
-		args    args
+		config  map[string]interface{}
+		roles   string
 		wantErr bool
 	}{
-		// TODO: Add test cases.
+		{
+			name: "Valid roles",
+			config: map[string]interface{}{
+				"cluster": map[string]interface{}{},
+			},
+			roles:   `{"test-label": ["role1", "role2"]}`,
+			wantErr: false,
+		},
+		{
+			name: "Invalid roles",
+			config: map[string]interface{}{
+				"cluster": map[string]interface{}{},
+			},
+			roles:   `invalid-json`,
+			wantErr: true,
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := setRoles(tt.args.aerospikeVectorSearchConfig); (err != nil) != tt.wantErr {
+			os.Setenv("AEROSPIKE_VECTOR_SEARCH_NODE_ROLES", tt.roles)
+			instance = &NodeInfoSingleton{node: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						AVS_NODE_LABEL_KEY: "test-label",
+					},
+				},
+			}}
+			err := setRoles(tt.config)
+			if (err != nil) != tt.wantErr {
 				t.Errorf("setRoles() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -144,19 +268,35 @@ func Test_setRoles(t *testing.T) {
 }
 
 func Test_writeConfig(t *testing.T) {
-	type args struct {
-		aerospikeVectorSearchConfig map[string]interface{}
-	}
 	tests := []struct {
 		name    string
-		args    args
+		config  map[string]interface{}
 		wantErr bool
 	}{
-		// TODO: Add test cases.
+		{
+			name: "Valid configuration",
+			config: map[string]interface{}{
+				"service": map[string]interface{}{
+					"ports": map[string]interface{}{
+						"http": map[string]interface{}{
+							"port": 8080,
+						},
+					},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:    "Invalid configuration",
+			config:  map[string]interface{}{},
+			wantErr: true,
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := writeConfig(tt.args.aerospikeVectorSearchConfig); (err != nil) != tt.wantErr {
+			err := writeConfig(tt.config)
+			if (err != nil) != tt.wantErr {
 				t.Errorf("writeConfig() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -165,29 +305,28 @@ func Test_writeConfig(t *testing.T) {
 
 func Test_run(t *testing.T) {
 	tests := []struct {
-		name string
-		want int
+		name    string
+		config  string
+		wantErr bool
 	}{
-		// TODO: Add test cases.
+		{
+			name:    "Valid configuration",
+			config:  `{"service": {"ports": {"http": {"port": 8080}}}}`,
+			wantErr: false,
+		},
+		{
+			name:    "Invalid configuration",
+			config:  `invalid-json`,
+			wantErr: true,
+		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := run(); got != tt.want {
-				t.Errorf("run() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
 
-func Test_main(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		// TODO: Add test cases.
-	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			main()
+			os.Setenv("AEROSPIKE_VECTOR_SEARCH_CONFIG", tt.config)
+			if got := run(); (got != 0) != tt.wantErr {
+				t.Errorf("run() = %v, wantErr %v", got, tt.wantErr)
+			}
 		})
 	}
 }
