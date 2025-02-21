@@ -35,6 +35,19 @@ spec:
       serviceAccountName: {{ include "aerospike-vector-search.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if not .Values.multiPodPerHost }}
+      hostNetwork: true
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - {{ include "aerospike-vector-search.fullname" . }}
+              topologyKey: kubernetes.io/hostname
+      {{- end }}
       initContainers:
         - name: config-injector
           image: "{{ .Values.initContainer.image.repository }}:{{ .Values.initContainer.image.tag | default .Chart.Version }}"
@@ -43,6 +56,8 @@ spec:
             - name: aerospike-vector-search
               mountPath: /etc/aerospike-vector-search
           env:
+            - name: CONTAINER_PORT
+              value:  {{ default "5000" (keys .Values.aerospikeVectorSearchConfig.service.ports | first) | quote }}
             - name: NODE_NAME
               valueFrom:
                 fieldRef:

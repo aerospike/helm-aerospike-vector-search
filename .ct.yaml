@@ -1,0 +1,33 @@
+# Minimal configuration for ct (chart-testing)
+charts:
+  - charts/aerospike-vector-search  # This is the directory containing your charts
+
+# ------------------------------------------------------------------------------
+# Optional configurations below - uncomment and modify as needed.
+# ------------------------------------------------------------------------------
+
+# Specify explicit chart directories if you don't follow the default layout
+# chart-dirs:
+#   - charts/mychart
+#   - charts/anotherchart
+
+# Provide additional values files for isolated install tests
+values-files:
+  - ci/values-with-heartbeat.yaml
+
+# Extra arguments can be passed to helm commands if needed
+extra-args:
+  install: "--debug"         # e.g., add extra flags to helm install
+  template: "--debug"        # e.g., add extra flags to helm template
+
+#Linting configuration: enable or disable linting and pass extra arguments
+lint:
+  enabled: true
+  extra-args: "--strict"
+
+# Override the default Helm version (default is Helm 3)
+# helm:
+#   version: v3
+
+# Set a chart repository URL if you need to pull charts from an external repo
+# repo-url: "https://example.com/charts"
