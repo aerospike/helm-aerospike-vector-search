@@ -36,6 +36,7 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       {{- if not .Values.multiPodPerHost }}
+      dnsPolicy: ClusterFirstWithHostNet
       hostNetwork: true
       affinity:
         podAntiAffinity:

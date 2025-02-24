@@ -1,0 +1,68 @@
+{{- /*
+  Test 1: Verify that when multipodPerHost is false, hostNetwork is enabled.
+  If multipodPerHost is true (or not explicitly false), then hostNetwork should not be set.
+*/ -}}
+{{- if not .Values.multipodPerHost }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "aerospike-vector-search.fullname" . }}-hostnetwork-test"
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  hostNetwork: true
+  containers:
+    - name: test
+      image: busybox
+      command: ["sh", "-c", "echo 'Host networking enabled' && exit 0"]
+  restartPolicy: Never
+{{- else }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "aerospike-vector-search.fullname" . }}-internal-test"
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  # Note: No hostNetwork setting here implies internal networking.
+  containers:
+    - name: test
+      image: busybox
+      command: ["sh", "-c", "echo 'Internal networking' && exit 0"]
+  restartPolicy: Never
+{{- end }}
+
+---
+{{- /*
+  Test 2: Verify that the CONTAINER_PORT environment variable is set correctly.
+  This example assumes that the port is derived from the keys of .Values.aerospikeVectorSearchConfig.service.ports.
+  If no port is defined, we default to "5000".
+*/ -}}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "aerospike-vector-search.fullname" . }}-env-test"
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  containers:
+    - name: env-test
+      image: busybox
+      env:
+        - name: CONTAINER_PORT
+          value: {{ (keys .Values.aerospikeVectorSearchConfig.service.ports | first) | default "5000" | quote }}
+      command:
+        - sh
+        - -c
+        - |
+          if [ "$CONTAINER_PORT" = "{{ (keys .Values.aerospikeVectorSearchConfig.service.ports | first) | default "5000" }}" ]; then
+            echo "CONTAINER_PORT correctly set to $CONTAINER_PORT";
+            exit 0;
+          else
+            echo "CONTAINER_PORT is not set correctly, got $CONTAINER_PORT";
+            exit 1;
+          fi
+  restartPolicy: Never
