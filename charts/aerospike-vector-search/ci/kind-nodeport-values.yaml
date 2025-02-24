@@ -1,0 +1,45 @@
+fullnameOverride: avs-app
+aerospikeVectorSearchConfig:
+  cluster:
+    cluster-name: "avs-db-1"
+  feature-key-file: "/etc/aerospike-vector-search/secrets/features.conf"  # Sharing secret with aerospike.
+
+  service:
+    ports:
+      5000:
+        addresses:
+          "0.0.0.0"
+  manage:
+    ports:
+      5040: {}
+  interconnect:
+    ports:
+      5001:
+        addresses:
+          "0.0.0.0"
+  aerospike:
+    seeds:
+      - aerospike-cluster-0-0.aerospike-cluster.aerospike.svc.cluster.local:
+          port: 3000
+  logging:
+    #    file: /var/log/aerospike-vector-search/aerospike-vector-search.log
+    enable-console-logging: false
+    format: simple
+    max-history: 30
+    levels:
+      metrics-ticker: info
+      root: info
+    ticker-interval: 10
+
+service:
+  enabled: true
+  type: NodePort
+  externalTrafficPolicy: Local
+  ports:
+    - name: "svc-5000"
+      port: 5000
+      targetPort: 5000
+      nodePort: 30036
+securityContext:
+  allowPrivilegeEscalation: false
+  runAsUser: 0

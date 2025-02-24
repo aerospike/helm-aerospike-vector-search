@@ -20,7 +20,7 @@ imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 aerospikeVectorSearchNodeRoles: {}
-
+multiPodPerHost: true
 aerospikeVectorSearchConfig:
   # Optional: service ports configuration
   service:

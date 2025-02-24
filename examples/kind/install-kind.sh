@@ -16,7 +16,7 @@ if [ ! -f "$WORKSPACE/examples/kind/config/features.conf" ]; then
 fi
 
 echo "Installing Kind"
-kind create cluster --config "$WORKSPACE/examples/kind/config/kind-cluster.yaml"
+kind create cluster --config "$WORKSPACE/examples/kind/config/kind-cluster.yaml" || true
 kubectl cluster-info --context kind-kind
 
 echo "Deploying AKO"
@@ -84,5 +84,5 @@ done
 
 sleep 30
 echo "Deploy AVS"
-helm install avs-app "$WORKSPACE/charts/aerospike-vector-search" \
+echo helm install avs-app "$WORKSPACE/charts/aerospike-vector-search" \
 --values "$WORKSPACE/avs-init-container/avs-kind-values.yaml" --namespace aerospike
