@@ -1,8 +1,9 @@
-{{- /*
-  Test 1: Verify that when multipodPerHost is false, hostNetwork is enabled.
-  If multipodPerHost is true (or not explicitly false), then hostNetwork should not be set.
-*/ -}}
+
+#   Test 1: Verify that when multipodPerHost is false, hostNetwork is enabled.
+#   If multipodPerHost is true (or not explicitly false), then hostNetwork should not be set.
+
 {{- if not .Values.multipodPerHost }}
+
 apiVersion: v1
 kind: Pod
 metadata:
@@ -35,11 +36,11 @@ spec:
 {{- end }}
 
 ---
-{{- /*
-  Test 2: Verify that the CONTAINER_PORT environment variable is set correctly.
-  This example assumes that the port is derived from the keys of .Values.aerospikeVectorSearchConfig.service.ports.
-  If no port is defined, we default to "5000".
-*/ -}}
+# 
+#   Test 2: Verify that the CONTAINER_PORT environment variable is set correctly.
+#   This example assumes that the port is derived from .Values.aerospikeVectorSearchConfig.service.ports.
+#   If no port is defined, we default to "5000".
+# 
 apiVersion: v1
 kind: Pod
 metadata:
