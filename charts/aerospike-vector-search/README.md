@@ -37,7 +37,7 @@ helm repo add aerospike-io https://artifact.aerospike.io/artifactory/api/helm/ae
 | `aerospikeVectorSearchConfig`              | AVS cluster configuration deployed to `/etc/aerospike-vector-search/aerospike-vector-search.yml`. Use this section to define indexing parameters, vector dimensions, port settings, etc.                                                                                                             | _See values.yaml_                                                                                                                                                                                                                               |
 | `initContainers`                           | List of additional init containers added to each AVS pod for custom behavior.                                                                                                                                                                                                                             | `[]`                                                                                                                                                                                                                                            |
 | `initContainer`                            | Configures the primary init container, which adjusts AVS configuration and node scheduling. Includes image details (repository, tag, pull policy) and can be extended with options such as host networking.                                                                                        | _See values.yaml_ (repository: `"artifact.aerospike.io/container/avs-init-container"`, tag: `""`, pullPolicy: `"IfNotPresent"`)                                                                                                                  |
-| `aerospikeVectorSearchNodeRoles`           | Defines a mapping from node pool labels to AVS node roles. For example, nodes labeled as `query-nodes` will be scheduled with the role `query`, and those in the `indexer-nodes` pool with `index-update`. This enables the init container to tailor configuration and pod scheduling.             | <pre>query-nodes: [query]<br>indexer-nodes: [index-update]<br>standalone-nodes: [standalone-indexer]<br>default-nodes: [query, index-update]</pre>                                                                                        |
+| `aerospikeVectorSearchNodeRoles`           | Defines a mapping from node pool labels to AVS node roles. For example, nodes labeled as `query-nodes` will be scheduled with the role `query`, and those in the `indexer-nodes` pool with `index-update`. This enables the init container to tailor configuration and pod scheduling.             | [see default](#node-roles-config)                                                                                       |
 | `multiPodPerHost`                          | Specifies whether multiple AVS pods can be scheduled on the same host.                                                                                                                                                                                                                                   | `true`                                                                                                                                                                                                                                          |
 | `serviceAccount`                           | Service Account details including creation flag, name, and annotations. See the [values.yaml](values.yaml) for further details.                                                                                                                                                                          | _See values.yaml_                                                                                                                                                                                                                               |
 | `podAnnotations`                           | Additional pod [annotations](https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/). Should be specified as a map of annotation names to values.                                                                                                                         | `{}`                                                                                                                                                                                                                                            |
@@ -113,6 +113,21 @@ The AVS configuration is provided as yaml under the key `aerospikeVectorSearchCo
 
 See [Aerospike Vector Search](https://aerospike.com/docs/vector/operate/configuration) configuration documentation for more details on AVS configuration.
 
+### Node Roles Config
+Default config is a map of roles. Nodes matching the key will be assigned the corresponding list of roles.
+
+```yaml
+aerospikeVectorSearchNodeRoles:
+  query-nodes:
+    - query
+  indexer-nodes:
+    - index-update
+  standalone-nodes:
+    - standalone-indexer
+  default-nodes:
+    - query
+    - index-update
+```
 
 ### Create a new namespace
 We recommend using a namespace for the AVS cluster. If the namespace does not exist run the following command:
