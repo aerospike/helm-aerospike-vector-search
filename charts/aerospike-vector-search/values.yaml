@@ -19,8 +19,20 @@ initContainer:
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
-aerospikeVectorSearchNodeRoles: {}
 
+# Adding appropriate lables to node pools will cause avs pods with that role to be scheduled on nodes in that pool.
+aerospikeVectorSearchNodeRoles:
+  query-nodes:
+    - query
+  indexer-nodes:
+    - index-update
+  standalone-nodes:
+    - standalone-indexer
+  default-nodes:
+    - query
+    - index-update
+
+multiPodPerHost: true
 aerospikeVectorSearchConfig:
   # Optional: service ports configuration
   service:
@@ -41,8 +53,9 @@ aerospikeVectorSearchConfig:
 #  node-id: a1
 #
 # # node-roles:
-# #   - INDEX_QUERY
-# #   - INDEX_UPDATE
+# #   - qyery
+# #   - index-update
+# #   - standalone-indexer
 # ## If TLS is desired, TLS configuration ids used
 # ## and associated TLS configurations.
 # tls:

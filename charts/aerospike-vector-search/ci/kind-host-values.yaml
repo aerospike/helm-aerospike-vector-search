@@ -1,7 +1,9 @@
+fullnameOverride: avs-app
 aerospikeVectorSearchConfig:
   cluster:
     cluster-name: "avs-db-1"
   feature-key-file: "/etc/aerospike-vector-search/secrets/features.conf"  # Sharing secret with aerospike.
+
   service:
     ports:
       5000:
@@ -28,7 +30,7 @@ aerospikeVectorSearchConfig:
       metrics-ticker: info
       root: info
     ticker-interval: 10
-
+multiPodPerHost: false
 securityContext:
   allowPrivilegeEscalation: false
   runAsUser: 0

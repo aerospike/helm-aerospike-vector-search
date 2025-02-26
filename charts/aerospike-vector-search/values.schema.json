@@ -1,0 +1,158 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Aerospike Vector Search Helm Chart Values Schema",
+  "description": "Schema for validating core values for the Aerospike Vector Search Helm chart.",
+  "type": "object",
+  "properties": {
+    "replicaCount": {
+      "description": "Number of AVS instance pods to run.",
+      "type": "integer",
+      "default": 1
+    },
+    "image": {
+      "description": "Container image settings for the main AVS image.",
+      "type": "object",
+      "properties": {
+        "repository": {
+          "description": "Docker repository for the AVS image.",
+          "type": "string",
+          "default": "aerospike/aerospike-vector-search"
+        },
+        "tag": {
+          "description": "Image tag to deploy.",
+          "type": "string",
+          "default": "1.0.0"
+        },
+        "pullPolicy": {
+          "description": "Image pull policy.",
+          "type": "string",
+          "enum": ["Always", "IfNotPresent", "Never"],
+          "default": "IfNotPresent"
+        }
+      },
+      "required": ["repository", "tag", "pullPolicy"]
+    },
+    "initContainer": {
+      "description": "Configuration for the AVS init container, which adjusts configuration based on node roles.",
+      "type": "object",
+      "properties": {
+        "image": {
+          "description": "Image settings for the init container.",
+          "type": "object",
+          "properties": {
+            "repository": {
+              "description": "Repository for the AVS init container image.",
+              "type": "string",
+              "default": "artifact.aerospike.io/container/avs-init-container"
+            },
+            "tag": {
+              "description": "Image tag for the init container (defaults to chart version if empty).",
+              "type": "string",
+              "default": ""
+            },
+            "pullPolicy": {
+              "description": "Pull policy for the init container image.",
+              "type": "string",
+              "enum": ["Always", "IfNotPresent", "Never"],
+              "default": "IfNotPresent"
+            }
+          },
+          "required": ["repository", "tag", "pullPolicy"]
+        }
+      },
+      "required": ["image"]
+    },
+    "aerospikeVectorSearchNodeRoles": {
+      "description": "Mapping of node pool labels to AVS node roles. Nodes labeled in a given node pool (e.g. `query-nodes`) will receive the associated role (e.g. `query`). This lets the init container adjust configuration and schedule pods on specialized nodes.",
+      "type": "object",
+      "properties": {
+        "query-nodes": {
+          "description": "Roles for nodes labeled as query nodes.",
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["query"]
+        },
+        "indexer-nodes": {
+          "description": "Roles for nodes labeled as indexer nodes.",
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["index-update"]
+        },
+        "standalone-nodes": {
+          "description": "Roles for nodes labeled as standalone nodes.",
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["standalone-indexer"]
+        },
+        "default-nodes": {
+          "description": "Default roles for nodes that don't fall into a specific pool.",
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["query", "index-update"]
+        }
+      },
+      "additionalProperties": true
+    },
+    "multiPodPerHost": {
+      "description": "Whether multiple AVS pods can be scheduled on the same host.",
+      "type": "boolean",
+      "default": true
+    },
+    "aerospikeVectorSearchConfig": {
+      "description": "AVS-specific configuration rendered to /etc/aerospike-vector-search/aerospike-vector-search.yml. Use this to define indexing parameters, vector dimensions, port settings, etc.",
+      "type": "object",
+      "additionalProperties": true
+    },
+    "initContainers": {
+      "description": "List of additional init containers for custom behavior in each AVS pod.",
+      "type": "array",
+      "items": { "type": "object" },
+      "default": []
+    },
+    "serviceAccount": {
+      "description": "Service account configuration for the AVS pods.",
+      "type": "object",
+      "properties": {
+        "create": {
+          "description": "Whether to create a new service account.",
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "required": ["create"],
+      "additionalProperties": true
+    },
+    "podAnnotations": {
+      "description": "Additional annotations to apply to every AVS pod.",
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "default": {}
+    },
+    "podLabels": {
+      "description": "Additional labels to apply to every AVS pod.",
+      "type": "object",
+      "additionalProperties": { "type": "string" },
+      "default": {}
+    },
+    "podSecurityContext": {
+      "description": "Pod-level security context settings.",
+      "type": "object",
+      "additionalProperties": true,
+      "default": {}
+    },
+    "securityContext": {
+      "description": "Container-level security context settings.",
+      "type": "object",
+      "additionalProperties": true,
+      "default": {}
+    }
+  },
+  "required": [
+    "replicaCount",
+    "image",
+    "initContainer",
+    "aerospikeVectorSearchNodeRoles",
+    "multiPodPerHost",
+    "aerospikeVectorSearchConfig"
+  ]
+}

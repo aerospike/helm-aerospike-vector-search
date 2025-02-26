@@ -29,47 +29,83 @@ helm repo add aerospike-io https://artifact.aerospike.io/artifactory/api/helm/ae
 
 ### Configuration
 
-| Parameter                     | Description                                                                                                                                                                          | Default                        |
-|-------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------|
-| `replicaCount`                | Configures the number AVS instance pods to run.                                                                                                                                      | '1'                            |
-| `image`                       | Configures AVS image repository, tag and pull policy.                                                                                                                                | see [values.yaml](values.yaml) |
-| `imagePullSecrets`            | For Private docker registries, when authentication is needed.                                                                                                                        | see [values.yaml](values.yaml) |
-| `aerospikeVectorSearchConfig` | AVS cluster configuration deployed to `/etc/aerospike-vector-search/aerospike-vector-search.yml`.                                                                                              | see [values.yaml](values.yaml) |
-| `initContainers`              | List of initContainers added to each AVS pods for custom cluster behavior.                                                                                                           | `[]`                           |
-| `serviceAccount`              | Service Account details like name and annotations.                                                                                                                                   | see [values.yaml](values.yaml) |
-| `podAnnotations`              | Additional pod [annotations](https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/). Should be specified as a map of annotation names to annotation values. | `{}`                           |
-| `podLabels`                   | Additional pod [labels](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/). Should be specified as a map of label names to label values.                     | `{}`                           |
-| `podSecurityContext`          | Pod [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/)                                                                                   | `{}`                           |
-| `securityContext`             | Container [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container)                                    | `{}`                           |
-| `service`                     | Load-Balancer configuration for more details please refer to a Load-Balancer docs.                                                                                                   | `{}`                           |
-| `resources`                   | Resource [requests and limits](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/) for the AVS pods.                                                     | `{}`                           |
-| `autoscaling`                 | Enable the horizontal pod auto-scaler.                                                                                                                                               | see [values.yaml](values.yaml) |
-| `extraVolumes`                | List of additional volumes to attach to the AVS pod.                                                                                                                                 | see [values.yaml](values.yaml) |
-| `extraVolumeMounts`           | Extra volume mounts corresponding to the volumes added to `extraVolumes`.                                                                                                            | see [values.yaml](values.yaml) |
-| `extraSecretVolumeMounts`     | Extra secret volume mounts corresponding to the volumes added to `extraVolumes`.                                                                                                     | see [values.yaml](values.yaml) |
-| `affinity`                    | [Affinity](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#affinity-and-anti-affinity)  rules if any for the pods.                                          | `{}`                           |
-| `nodeSelector`                | [Node selector](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector)  for the pods.                                                                | `{}`                           |
-| `tolerations`                 | [Tolerations](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/)  for the pods.                                                                          | `{}`                           |
+| **Parameter**                              | **Description**                                                                                                                                                                                                                                                                                           | **Default**                                                                                                                                                                                                                                     |
+|--------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `replicaCount`                             | Configures the number of AVS instance pods to run.                                                                                                                                                                                                                                                        | `1`                                                                                                                                                                                                                                             |
+| `image`                                    | Configures the AVS image repository, tag, and pull policy. See the [values.yaml](values.yaml) for details.                                                                                                                                                                                              | _See values.yaml_                                                                                                                                                                                                                               |
+| `imagePullSecrets`                         | For private Docker registries, specify a list of image pull secrets. See the [values.yaml](values.yaml) for details.                                                                                                                                                                                       | _See values.yaml_                                                                                                                                                                                                                               |
+| `aerospikeVectorSearchConfig`              | AVS cluster configuration deployed to `/etc/aerospike-vector-search/aerospike-vector-search.yml`. Use this section to define indexing parameters, vector dimensions, port settings, etc.                                                                                                             | _See values.yaml_                                                                                                                                                                                                                               |
+| `initContainers`                           | List of additional init containers added to each AVS pod for custom behavior.                                                                                                                                                                                                                             | `[]`                                                                                                                                                                                                                                            |
+| `initContainer`                            | Configures the primary init container, which adjusts AVS configuration and node scheduling. Includes image details (repository, tag, pull policy) and can be extended with options such as host networking.                                                                                        | _See values.yaml_ (repository: `"artifact.aerospike.io/container/avs-init-container"`, tag: `""`, pullPolicy: `"IfNotPresent"`)                                                                                                                  |
+| `aerospikeVectorSearchNodeRoles`           | Defines a mapping from node pool labels to AVS node roles. For example, nodes labeled as `query-nodes` will be scheduled with the role `query`, and those in the `indexer-nodes` pool with `index-update`. This enables the init container to tailor configuration and pod scheduling.             | [see default](#node-roles-config)                                                                                       |
+| `multiPodPerHost`                          | Specifies whether multiple AVS pods can be scheduled on the same host.                                                                                                                                                                                                                                   | `true`                                                                                                                                                                                                                                          |
+| `serviceAccount`                           | Service Account details including creation flag, name, and annotations. See the [values.yaml](values.yaml) for further details.                                                                                                                                                                          | _See values.yaml_                                                                                                                                                                                                                               |
+| `podAnnotations`                           | Additional pod [annotations](https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/). Should be specified as a map of annotation names to values.                                                                                                                         | `{}`                                                                                                                                                                                                                                            |
+| `podLabels`                                | Additional pod [labels](https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/). Should be specified as a map of label names to values.                                                                                                                                             | `{}`                                                                                                                                                                                                                                            |
+| `podSecurityContext`                       | Pod [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/).                                                                                                                                                                                                     | `{}`                                                                                                                                                                                                                                            |
+| `securityContext`                          | Container [security context](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/#set-the-security-context-for-a-container).                                                                                                                                                      | `{}`                                                                                                                                                                                                                                            |
+| `service`                                  | Load Balancer configuration for AVS. For more details please refer to Load Balancer docs.                                                                                                                                                                                                              | `{}`                                                                                                                                                                                                                                            |
+| `resources`                                | Resource [requests and limits](https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/) for the AVS pods.                                                                                                                                                                         | `{}`                                                                                                                                                                                                                                            |
+| `autoscaling`                              | Enable the horizontal pod autoscaler. See the [values.yaml](values.yaml) for details.                                                                                                                                                                                                                  | _See values.yaml_                                                                                                                                                                                                                               |
+| `extraVolumes`                             | List of additional volumes to attach to the AVS pod. See the [values.yaml](values.yaml) for details.                                                                                                                                                                                                   | _See values.yaml_                                                                                                                                                                                                                               |
+| `extraVolumeMounts`                        | Extra volume mounts corresponding to the volumes added in `extraVolumes`. See the [values.yaml](values.yaml) for details.                                                                                                                                                                                 | _See values.yaml_                                                                                                                                                                                                                               |
+| `extraSecretVolumeMounts`                  | Extra secret volume mounts corresponding to the volumes added in `extraVolumes`. See the [values.yaml](values.yaml) for details.                                                                                                                                                                          | _See values.yaml_                                                                                                                                                                                                                               |
+| `affinity`                                 | [Affinity](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#affinity-and-anti-affinity) rules, if any, for the pods.                                                                                                                                                          | `{}`                                                                                                                                                                                                                                            |
+| `nodeSelector`                             | [Node selector](https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/#nodeselector) for the pods.                                                                                                                                                                                     | `{}`                                                                                                                                                                                                                                            |
+| `tolerations`                              | [Tolerations](https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/) for the pods.                                                                                                                                                                                             | `{}`                                                                                                                                                                                                                                            |
 
 ## Deploy the AVS Cluster
 
 We recommend creating a new `.yaml` for providing configuration values to the helm chart for deployment.
 See the [Aerospike Vector](https://github.com/aerospike/aerospike-vector) repository for examples and deployment scripts.
 
-A sample values yaml file is shown below:
+A sample values yaml file for a single node cluster is shown below:
 
 ```yaml
-replicaCount: 1
-
-image:
-  tag: "1.0.0"
-
 aerospikeVectorSearchConfig:
+  cluster:
+    cluster-name: "avs-db-1"
+  feature-key-file: "/etc/aerospike-vector-search/secrets/features.conf"  # Sharing secret with aerospike.
+
+  service:
+    ports:
+      5000:
+        addresses:
+          "0.0.0.0"
+  manage:
+    ports:
+      5040: {}
+  interconnect:
+    ports:
+      5001:
+        addresses:
+          "0.0.0.0"
   aerospike:
-    metadata-namespace: "avs-meta"
     seeds:
       - aerospike-cluster-0-0.aerospike-cluster.aerospike.svc.cluster.local:
           port: 3000
+  logging:
+    #    file: /var/log/aerospike-vector-search/aerospike-vector-search.log
+    enable-console-logging: false
+    format: simple
+    max-history: 30
+    levels:
+      metrics-ticker: info
+      root: info
+    ticker-interval: 10
+multiPodPerHost: false
+securityContext:
+  allowPrivilegeEscalation: false
+  runAsUser: 0
+
+service:
+  enabled: false
+  type: ClusterIP
+  ports:
+    - name: "svc-port"
+      port: 5000
+      targetPort: 5000
+
 ```
 
 Here `replicaCount` is the count of AVS pods that are deployed.
@@ -77,6 +113,21 @@ The AVS configuration is provided as yaml under the key `aerospikeVectorSearchCo
 
 See [Aerospike Vector Search](https://aerospike.com/docs/vector/operate/configuration) configuration documentation for more details on AVS configuration.
 
+### Node Roles Config
+Default config is a map of roles. Nodes matching the key will be assigned the corresponding list of roles.
+
+```yaml
+aerospikeVectorSearchNodeRoles:
+  query-nodes:
+    - query
+  indexer-nodes:
+    - index-update
+  standalone-nodes:
+    - standalone-indexer
+  default-nodes:
+    - query
+    - index-update
+```
 
 ### Create a new namespace
 We recommend using a namespace for the AVS cluster. If the namespace does not exist run the following command:

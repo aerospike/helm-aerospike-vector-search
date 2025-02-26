@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"sync"
 
 	"aerospike.com/avs-init-container/v2/util"
@@ -28,11 +29,98 @@ type NodeInfoSingleton struct {
 	service *v1.Service
 	err     error
 }
+type NetworkMode string
+
+const (
+	NetworkModeNodePort    NetworkMode = "nodeport"
+	NetworkModeHostNetwork NetworkMode = "hostnetwork"
+)
 
 var (
 	instance *NodeInfoSingleton
 	once     sync.Once
 )
+
+func getEndpointByMode() (string, int32, error) {
+	// Default to nodeport if NETWORK_MODE is not set.
+	// We will try to get the nodeport from the service if it is a NodePort service.
+	// Otherwise, we will default to internal networking.
+	// If NETWORK_MODE is set to hostnetwork, we will use the CONTAINER_PORT environment
+	// variable to get the port.
+	modeStr := os.Getenv("NETWORK_MODE")
+	var networkMode NetworkMode
+	if modeStr == "" {
+		networkMode = NetworkModeNodePort
+	} else {
+		networkMode = NetworkMode(modeStr)
+	}
+	log.Printf("Operating in NETWORK_MODE: %s", networkMode)
+
+	node, service, err := GetNodeInstance()
+	if err != nil {
+		return "", 0, err
+	}
+
+	// Determine node IP: prefer external, then internal.
+	var nodeIP string
+	for _, addr := range node.Status.Addresses {
+		if addr.Type == v1.NodeExternalIP {
+			nodeIP = addr.Address
+			break
+		}
+	}
+	if nodeIP == "" {
+		for _, addr := range node.Status.Addresses {
+			if addr.Type == v1.NodeInternalIP {
+				nodeIP = addr.Address
+				break
+			}
+		}
+	}
+	if nodeIP == "" {
+		return "", 0, fmt.Errorf("no valid node IP found")
+	}
+
+	switch networkMode {
+	case NetworkModeNodePort:
+		if service != nil && service.Spec.Type == v1.ServiceTypeNodePort {
+			var nodePort int32
+			for _, port := range service.Spec.Ports {
+				if port.NodePort != 0 {
+					nodePort = port.NodePort
+					log.Printf("Found node port: %d", nodePort)
+					break
+				}
+			}
+			if nodePort != 0 {
+				return nodeIP, nodePort, nil
+			}
+			log.Println("NodePort not found; defaulting to internal networking (no advertised listener update)")
+			return "", 0, nil
+		}
+		log.Println("Service is nil or not NodePort; defaulting to internal networking (no advertised listener update)")
+		return "", 0, nil
+
+	case NetworkModeHostNetwork:
+		containerPortStr := os.Getenv("CONTAINER_PORT")
+		if containerPortStr == "" {
+			return "", 0, fmt.Errorf("CONTAINER_PORT environment variable is not set for hostnetwork mode")
+		}
+		containerPort, err := strconv.Atoi(containerPortStr)
+		if err != nil {
+			return "", 0, fmt.Errorf("invalid CONTAINER_PORT value: %s", containerPortStr)
+		}
+		if containerPort < 0 || containerPort > 65535 {
+			return "", 0, fmt.Errorf("CONTAINER_PORT value out of range: %d", containerPort)
+		}
+		log.Println("CONTAINER_PORT:", containerPortStr, "for hostnetwork mode")
+
+		return nodeIP, int32(containerPort), nil
+
+	default:
+		return "", 0, fmt.Errorf("unsupported NETWORK_MODE: %s", networkMode)
+	}
+}
 
 func GetNodeInstance() (*v1.Node, *v1.Service, error) {
 	once.Do(func() {
@@ -106,78 +194,22 @@ func GetNodeInstance() (*v1.Node, *v1.Service, error) {
 	return instance.node, instance.service, instance.err
 }
 
-func getNodeIp() (string, int32, error) {
-	log.Println("Starting getNodeIp()")
-	externalIP, internalIP := "", ""
-
-	node, service, err := GetNodeInstance()
-	if err != nil {
-		log.Println("Error in GetNodeInstance:", err)
-		return "", 0, err
-	}
-
-	for _, addr := range node.Status.Addresses {
-		log.Printf("Node address: Type=%s, Address=%s\n", addr.Type, addr.Address)
-	}
-
-	if service == nil {
-		log.Println("Service is nil, skipping advertised listener configuration")
-		return "", 0, nil
-	}
-
-	if service.Spec.Type != v1.ServiceTypeNodePort {
-		log.Printf("Service type is %s, not NodePort; skipping advertised listener configuration\n", service.Spec.Type)
-		return "", 0, nil
-	}
-
-	var nodePort int32
-	for _, port := range service.Spec.Ports {
-		if port.NodePort != 0 {
-			nodePort = port.NodePort
-			log.Printf("Found node port: %d\n", nodePort)
-			break
-		}
-	}
-	if nodePort == 0 {
-		err := fmt.Errorf("node port is not set")
-		log.Println("Error:", err)
-		return "", 0, err
-	}
-
-	for _, addr := range node.Status.Addresses {
-		if addr.Type == v1.NodeInternalIP {
-			internalIP = addr.Address
-		} else if addr.Type == v1.NodeExternalIP {
-			externalIP = addr.Address
-		}
-	}
-	log.Printf("Determined node addresses - External: %s, Internal: %s\n", externalIP, internalIP)
-
-	if externalIP != "" {
-		return externalIP, nodePort, nil
-	}
-	if internalIP != "" {
-		return internalIP, nodePort, nil
-	}
-
-	log.Println("No valid IP found for node")
-	return "", 0, nil
-}
-
 func setAdvertisedListeners(aerospikeVectorSearchConfig map[string]interface{}) error {
 	log.Println("Starting setAdvertisedListeners()")
-	nodeIP, nodePort, err := getNodeIp()
+
+	// Use the new function to get the endpoint based on network mode.
+	ip, port, err := getEndpointByMode()
 	if err != nil {
-		log.Println("Error getting node IP:", err)
+		log.Println("Error getting endpoint:", err)
 		return err
 	}
 
-	if nodeIP == "" && nodePort == 0 {
-		log.Println("No node IP or port found; nothing to update")
+	if ip == "" && port == 0 {
+		log.Println("No endpoint available; nothing to update")
 		return nil
 	}
 
-	log.Printf("Setting advertised listeners to Node IP: %s, Port: %d\n", nodeIP, nodePort)
+	log.Printf("Setting advertised listeners to IP: %s, Port: %d\n", ip, port)
 
 	serviceConfig, ok := aerospikeVectorSearchConfig["service"].(map[string]interface{})
 	if !ok {
@@ -203,14 +235,13 @@ func setAdvertisedListeners(aerospikeVectorSearchConfig map[string]interface{}) 
 		portMap["advertised-listeners"] = map[string][]map[string]interface{}{
 			"default": {
 				{
-					"address": nodeIP,
-					"port":    nodePort,
+					"address": ip,
+					"port":    port,
 				},
 			},
 		}
 	}
 
-	// Log the updated ports config or .
 	updatedPorts, err := json.MarshalIndent(ports, "", "  ")
 	if err == nil {
 		log.Printf("Updated ports configuration: %s\n", string(updatedPorts))
@@ -307,7 +338,6 @@ func writeConfig(aerospikeVectorSearchConfig map[string]interface{}) error {
 		return err
 	}
 
-	// Log the final config for debugging purposes.
 	log.Printf("Final configuration:\n%s\n", string(configBytes))
 
 	file, err := os.Create(AVS_CONFIG_FILE_PATH)
@@ -346,7 +376,6 @@ func run() int {
 		return util.ToExitVal(err)
 	}
 
-	// Log the incoming configuration for reference.
 	configDump, _ := json.MarshalIndent(aerospikeVectorSearchConfig, "", "  ")
 	log.Printf("Initial configuration:\n%s\n", string(configDump))
 
