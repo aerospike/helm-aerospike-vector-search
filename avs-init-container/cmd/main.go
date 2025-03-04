@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 
 	"aerospike.com/avs-init-container/v2/util"
@@ -330,6 +331,136 @@ func setRoles(aerospikeVectorSearchConfig map[string]interface{}) error {
 	return nil
 }
 
+func getHeartbeatSeeds(aerospikeVectorSearchConfig map[string]interface{}) (map[string]string, error) {
+
+	heartbeat, ok := aerospikeVectorSearchConfig["heartbeat"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("Failed to retrieve heartbeat section")
+	}
+
+	heartbeatSeedList, ok := heartbeat["seeds"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("Failed to retrieve heartbeat seed list")
+	}
+
+	if len(heartbeatSeedList) == 0 {
+		return nil, fmt.Errorf("Heartbeat seed list is empty")
+	}
+
+	heartbeatSeed, ok := heartbeatSeedList[0].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("Failed to retrieve heartbeat seed list element")
+	}
+
+	heartbeatSeedDnsName, ok := heartbeatSeed["address"]
+	if !ok {
+		return nil, fmt.Errorf("Failed to retrieve heartbeat seed DNS name")
+	}
+
+	heartbeatSeedPort, ok := heartbeatSeed["port"]
+	if !ok {
+		return nil, fmt.Errorf("Failed to retrieve heartbeat seed port number")
+	}
+
+	return map[string]string{
+		"address": fmt.Sprintf("%v", heartbeatSeedDnsName),
+		"port":    fmt.Sprintf("%v", heartbeatSeedPort),
+	}, nil
+}
+
+func getDnsNameFormat(heartbeatSeedDnsName string) (string, string, error) {
+
+	heartbeatSeedDnsNameParts := strings.Split(heartbeatSeedDnsName, ".")
+	pod_name := heartbeatSeedDnsNameParts[0][0 : len(heartbeatSeedDnsNameParts[0])-2]
+
+	switch len(heartbeatSeedDnsNameParts) {
+	case 2:
+
+		return pod_name, "%s-%d" + "." + heartbeatSeedDnsNameParts[1], nil
+	case 6:
+		if heartbeatSeedDnsNameParts[3] == "svc" && heartbeatSeedDnsNameParts[4] == "cluster" && heartbeatSeedDnsNameParts[5] == "local" {
+			heartbeatSeedDnsNameFormat := fmt.Sprintf(
+				"%s.%s.%s.%s.%s",
+				heartbeatSeedDnsNameParts[1],
+				heartbeatSeedDnsNameParts[2],
+				heartbeatSeedDnsNameParts[3],
+				heartbeatSeedDnsNameParts[4],
+				heartbeatSeedDnsNameParts[5],
+			)
+
+			return pod_name, "%s-%d" + "." + heartbeatSeedDnsNameFormat, nil
+		}
+	}
+
+	return "", "", fmt.Errorf("Invalid DNS name format")
+}
+
+func generateHeartbeatSeedsDnsNames(aerospikeVectorSearchConfig map[string]interface{}) ([]map[string]string, error) {
+
+	replicasEnvVariable := os.Getenv("REPLICAS")
+	if replicasEnvVariable == "" {
+		return nil, fmt.Errorf("REPLICAS env variable is empty")
+	}
+	podNameEnvVariable := os.Getenv("POD_NAME")
+	if podNameEnvVariable == "" {
+		return nil, fmt.Errorf("POD_NAME env variable is empty")
+	}
+	parts := strings.Split(podNameEnvVariable, "-")
+	if len(parts) <= 1 {
+		return nil, fmt.Errorf("POD_NAME env variable has no decimal part")
+	}
+
+	pod_id, err := strconv.Atoi(parts[len(parts)-1])
+	if err != nil {
+		return nil, err
+	}
+
+	fmt.Printf("Pod ID: %d\n", pod_id)
+
+	replicas, err := strconv.Atoi(replicasEnvVariable)
+	if err != nil {
+		return nil, err
+	}
+
+	heartbeatSeeds, err := getHeartbeatSeeds(aerospikeVectorSearchConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	pod_name, heartbeatSeedDnsNameFormat, err := getDnsNameFormat(heartbeatSeeds["address"])
+	if err != nil {
+		return nil, err
+	}
+
+	heartbeatSeedDnsNames := make([]map[string]string, 0, replicas-1)
+
+	for i := 0; i < replicas; i++ {
+		if pod_id == i {
+			continue
+		}
+		heartbeatSeedDnsNames = append(heartbeatSeedDnsNames, map[string]string{
+			"address": fmt.Sprintf(heartbeatSeedDnsNameFormat, pod_name, i),
+			"port":    heartbeatSeeds["port"],
+		})
+	}
+
+	return heartbeatSeedDnsNames, nil
+}
+
+func setHeartbeatSeeds(aerospikeVectorSearchConfig map[string]interface{}) error {
+
+	heartbeatSeedDnsNames, err := generateHeartbeatSeedsDnsNames(aerospikeVectorSearchConfig)
+	if err != nil {
+		return err
+	}
+
+	if heartbeat, ok := aerospikeVectorSearchConfig["heartbeat"].(map[string]interface{}); ok {
+		heartbeat["seeds"] = heartbeatSeedDnsNames
+	}
+
+	return nil
+}
+
 func writeConfig(aerospikeVectorSearchConfig map[string]interface{}) error {
 	log.Println("Starting writeConfig()")
 	configBytes, err := yaml.Marshal(aerospikeVectorSearchConfig)
@@ -388,6 +519,12 @@ func run() int {
 	err = setAdvertisedListeners(aerospikeVectorSearchConfig)
 	if err != nil {
 		log.Println("Error setting advertised listeners:", err)
+		return util.ToExitVal(err)
+	}
+
+	err = setHeartbeatSeeds(aerospikeVectorSearchConfig)
+	if err != nil {
+		log.Println("Error setting heartbeat:", err)
 		return util.ToExitVal(err)
 	}
 
