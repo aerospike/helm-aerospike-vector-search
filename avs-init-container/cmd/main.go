@@ -415,6 +415,8 @@ func generateHeartbeatSeedsDnsNames(aerospikeVectorSearchConfig map[string]inter
 		return nil, err
 	}
 
+	fmt.Printf("Pod ID: %d\n", pod_id)
+
 	replicas, err := strconv.Atoi(replicasEnvVariable)
 	if err != nil {
 		return nil, err
@@ -430,16 +432,16 @@ func generateHeartbeatSeedsDnsNames(aerospikeVectorSearchConfig map[string]inter
 		return nil, err
 	}
 
-	heartbeatSeedDnsNames := make([]map[string]string, replicas, replicas)
+	heartbeatSeedDnsNames := make([]map[string]string, 0, replicas-1)
 
 	for i := 0; i < replicas; i++ {
 		if pod_id == i {
 			continue
 		}
-		heartbeatSeedDnsNames[i] = map[string]string{
+		heartbeatSeedDnsNames = append(heartbeatSeedDnsNames, map[string]string{
 			"address": fmt.Sprintf(heartbeatSeedDnsNameFormat, pod_name, i),
 			"port":    heartbeatSeeds["port"],
-		}
+		})
 	}
 
 	return heartbeatSeedDnsNames, nil
