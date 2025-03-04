@@ -401,6 +401,19 @@ func generateHeartbeatSeedsDnsNames(aerospikeVectorSearchConfig map[string]inter
 	if replicasEnvVariable == "" {
 		return nil, fmt.Errorf("REPLICAS env variable is empty")
 	}
+	podNameEnvVariable := os.Getenv("POD_NAME")
+	if podNameEnvVariable == "" {
+		return nil, fmt.Errorf("POD_NAME env variable is empty")
+	}
+	parts := strings.Split(podNameEnvVariable, "-")
+	if len(parts) <= 1 {
+		return nil, fmt.Errorf("POD_NAME env variable has no decimal part")
+	}
+
+	pod_id, err := strconv.Atoi(parts[len(parts)-1])
+	if err != nil {
+		return nil, err
+	}
 
 	replicas, err := strconv.Atoi(replicasEnvVariable)
 	if err != nil {
@@ -420,6 +433,9 @@ func generateHeartbeatSeedsDnsNames(aerospikeVectorSearchConfig map[string]inter
 	heartbeatSeedDnsNames := make([]map[string]string, replicas, replicas)
 
 	for i := 0; i < replicas; i++ {
+		if pod_id == i {
+			continue
+		}
 		heartbeatSeedDnsNames[i] = map[string]string{
 			"address": fmt.Sprintf(heartbeatSeedDnsNameFormat, pod_name, i),
 			"port":    heartbeatSeeds["port"],
