@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 
 	"aerospike.com/avs-init-container/v2/util"
 	v1 "k8s.io/api/core/v1"
@@ -23,7 +25,27 @@ const (
 	AVS_NODE_LABEL_KEY   = "aerospike.io/role-label"
 	NODE_ROLES_KEY       = "node-roles"
 	AVS_CONFIG_FILE_PATH = "/etc/aerospike-vector-search/aerospike-vector-search.yml"
+	JVM_OPTS_FILE_PATH   = "/etc/aerospike-vector-search/jvm.opts"
 )
+
+var (
+	envFilePath  = "/etc/podinfo/JAVA_TOOL_OPTIONS"
+	cgroupV2File = "/sys/fs/cgroup/memory.max"
+	cgroupV1File = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
+)
+
+func getEnvFilePath() string {
+	return envFilePath
+}
+
+func setEnvFilePath(path string) {
+	envFilePath = path
+}
+
+func setCgroupPaths(v2path, v1path string) {
+	cgroupV2File = v2path
+	cgroupV1File = v1path
+}
 
 type NodeInfoSingleton struct {
 	node    *v1.Node
@@ -41,6 +63,113 @@ var (
 	instance *NodeInfoSingleton
 	once     sync.Once
 )
+
+func getJvmOptions() (string, error) {
+	jvmOptions := os.Getenv("AEROSPIKE_VECTOR_SEARCH_JVM_OPTIONS")
+	var err error
+	if jvmOptions == "" {
+		jvmOptions, err = calculateJvmOptions()
+		if err != nil {
+			return "", fmt.Errorf("no supplied JVM options and failed to calculate options: %v", err)
+		}
+	}
+	return jvmOptions, nil
+}
+
+func calculateJvmOptions() (string, error) {
+	var memLimitBytes uint64
+
+	// Try cgroup v2 first
+	if _, err := os.Stat(cgroupV2File); err == nil {
+		memLimitBytes, err = readCgroupMemoryLimit(cgroupV2File)
+		if err != nil {
+			log.Printf("Warning: Failed to read cgroup v2 memory limit: %v", err)
+		}
+	}
+
+	// Fall back to cgroup v1 if v2 failed or doesn't exist
+	if memLimitBytes == 0 {
+		if _, err := os.Stat(cgroupV1File); err == nil {
+			memLimitBytes, err = readCgroupMemoryLimit(cgroupV1File)
+			if err != nil {
+				log.Printf("Warning: Failed to read cgroup v1 memory limit: %v", err)
+			}
+		}
+	}
+
+	// If both methods failed or returned 0, use system memory
+	if memLimitBytes == 0 {
+		var si syscall.Sysinfo_t
+		if err := syscall.Sysinfo(&si); err != nil {
+			return "", fmt.Errorf("failed to get system memory info: %v", err)
+		}
+		memLimitBytes = uint64(si.Totalram)
+		log.Printf("Using system total memory: %d bytes", memLimitBytes)
+	}
+
+	// Some platforms show a very large value if there's "no real limit"
+	// For example, 9223372036854771712 (~2^63-1).
+	// In this case, we should use the actual system memory
+	if memLimitBytes > 9000000000000000000 {
+		var si syscall.Sysinfo_t
+		if err := syscall.Sysinfo(&si); err != nil {
+			return "", fmt.Errorf("failed to get system memory info: %v", err)
+		}
+		memLimitBytes = uint64(si.Totalram)
+		log.Printf("No real memory limit set, using system total memory: %d bytes", memLimitBytes)
+	}
+
+	// Calculate Xmx as ~80% of the container limit
+	xmxBytes := memLimitBytes * 80 / 100
+	xmxMB := xmxBytes / 1024 / 1024
+
+	// Create the actual JVM options string defalult optimized settings (override with AEROSPIKE_VECTOR_SEARCH_JVM_OPTIONS if set)
+	jvmOptions := []string{
+		fmt.Sprintf("-Xmx%dm", xmxMB),
+		"-XX:+UseG1GC",                // Use G1 garbage collector
+		"-XX:+ParallelRefProcEnabled", // Enable parallel reference processing
+		"-XX:+UseStringDeduplication", // Enable string deduplication
+	}
+
+	jvmOptionsStr := strings.Join(jvmOptions, " ")
+	log.Printf("Calculated JVM options: %s", jvmOptionsStr)
+
+	// Update the file path reference
+	if err := os.MkdirAll(filepath.Dir(getEnvFilePath()), 0755); err != nil {
+		return "", fmt.Errorf("failed to create podinfo directory: %v", err)
+	}
+	if err := os.WriteFile(getEnvFilePath(), []byte(jvmOptionsStr), 0644); err != nil {
+		return "", fmt.Errorf("failed to write JVM options to environment file: %v", err)
+	}
+	log.Printf("Wrote JVM options to %s", getEnvFilePath())
+
+	return jvmOptionsStr, nil
+}
+
+func readCgroupMemoryLimit(path string) (uint64, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+
+	// Handle "max" value in cgroup v2
+	if strings.TrimSpace(string(data)) == "max" {
+		// If "max" is set, we'll use the system memory instead
+		var si syscall.Sysinfo_t
+		if err := syscall.Sysinfo(&si); err != nil {
+			return 0, fmt.Errorf("failed to get system memory info: %v", err)
+		}
+		return uint64(si.Totalram), nil
+	}
+
+	// Parse the memory limit value
+	limit, err := strconv.ParseUint(strings.TrimSpace(string(data)), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse memory limit value: %v", err)
+	}
+
+	return limit, nil
+}
 
 func getEndpointByMode() (string, int32, error) {
 	// Default to nodeport if NETWORK_MODE is not set.
@@ -494,6 +623,13 @@ func writeConfig(aerospikeVectorSearchConfig map[string]interface{}) error {
 func run() int {
 	log.Println("Init container started")
 
+	// Calculate JVM options first so they're available immediately
+	_, err := calculateJvmOptions()
+	if err != nil {
+		log.Printf("Error calculating JVM options: %v", err)
+		return util.ToExitVal(err)
+	}
+
 	configEnv := os.Getenv("AEROSPIKE_VECTOR_SEARCH_CONFIG")
 	if configEnv == "" {
 		log.Println("AEROSPIKE_VECTOR_SEARCH_CONFIG environment variable is not set")
@@ -501,7 +637,7 @@ func run() int {
 	}
 
 	var aerospikeVectorSearchConfig map[string]interface{}
-	err := json.Unmarshal([]byte(configEnv), &aerospikeVectorSearchConfig)
+	err = json.Unmarshal([]byte(configEnv), &aerospikeVectorSearchConfig)
 	if err != nil {
 		log.Println("Error unmarshalling AEROSPIKE_VECTOR_SEARCH_CONFIG:", err)
 		return util.ToExitVal(err)

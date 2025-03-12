@@ -49,13 +49,21 @@ spec:
                       - {{ include "aerospike-vector-search.fullname" . }}
               topologyKey: kubernetes.io/hostname
       {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "aerospike-vector-search.fullname" . }}
+        - name: podinfo
+          emptyDir: {}
       initContainers:
         - name: config-injector
           image: "{{ .Values.initContainer.image.repository }}:{{ .Values.initContainer.image.tag | default .Chart.Version }}"
           imagePullPolicy: {{ .Values.initContainer.image.pullPolicy | default "Always" }}
           volumeMounts:
-            - name: aerospike-vector-search
+            - name: config
               mountPath: /etc/aerospike-vector-search
+            - name: podinfo
+              mountPath: /etc/podinfo
           env:
             - name: NETWORK_MODE
               value: {{ if .Values.multipodPerHost }}{{ quote "nodeport" }}{{ else }}{{ quote "hostnetwork" }}{{ end }}
@@ -129,9 +137,18 @@ spec:
               protocol: {{ default "TCP" $config.protocol }}
             {{- end }}
           {{- end }}
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "aerospike-vector-search.fullname" . }}-jvm
+                  key: JAVA_TOOL_OPTIONS
           volumeMounts:
-            - name: aerospike-vector-search
+            - name: config
               mountPath: /etc/aerospike-vector-search
+            - name: podinfo
+              mountPath: /etc/podinfo
+              subPath: JAVA_TOOL_OPTIONS
             - name: aerospike-secret
               mountPath: /etc/aerospike-vector-search/secrets
               readOnly: true
