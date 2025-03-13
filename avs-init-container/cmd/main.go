@@ -461,19 +461,17 @@ func setRoles(aerospikeVectorSearchConfig map[string]interface{}) error {
 }
 
 func getHeartbeatSeeds(aerospikeVectorSearchConfig map[string]interface{}) (map[string]string, error) {
-
+	log.Println("Checking for heartbeat configuration...")
 	heartbeat, ok := aerospikeVectorSearchConfig["heartbeat"].(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("Failed to retrieve heartbeat section")
+		log.Println("Heartbeat section not found in configuration (optional) - skipping heartbeat setup")
+		return nil, nil
 	}
 
 	heartbeatSeedList, ok := heartbeat["seeds"].([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("Failed to retrieve heartbeat seed list")
-	}
-
-	if len(heartbeatSeedList) == 0 {
-		return nil, fmt.Errorf("Heartbeat seed list is empty")
+	if !ok || len(heartbeatSeedList) == 0 {
+		log.Println("No seeds found in heartbeat configuration (optional) - skipping heartbeat setup")
+		return nil, nil
 	}
 
 	heartbeatSeed, ok := heartbeatSeedList[0].(map[string]interface{})
@@ -491,6 +489,7 @@ func getHeartbeatSeeds(aerospikeVectorSearchConfig map[string]interface{}) (map[
 		return nil, fmt.Errorf("Failed to retrieve heartbeat seed port number")
 	}
 
+	log.Printf("Found heartbeat seed configuration: address=%v, port=%v", heartbeatSeedDnsName, heartbeatSeedPort)
 	return map[string]string{
 		"address": fmt.Sprintf("%v", heartbeatSeedDnsName),
 		"port":    fmt.Sprintf("%v", heartbeatSeedPort),
@@ -525,6 +524,15 @@ func getDnsNameFormat(heartbeatSeedDnsName string) (string, string, error) {
 }
 
 func generateHeartbeatSeedsDnsNames(aerospikeVectorSearchConfig map[string]interface{}) ([]map[string]string, error) {
+	log.Println("Generating heartbeat seed DNS names...")
+	heartbeatSeeds, err := getHeartbeatSeeds(aerospikeVectorSearchConfig)
+	if err != nil {
+		return nil, err
+	}
+	if heartbeatSeeds == nil {
+		log.Println("No heartbeat seeds to process - skipping DNS name generation")
+		return nil, nil
+	}
 
 	replicasEnvVariable := os.Getenv("REPLICAS")
 	if replicasEnvVariable == "" {
@@ -551,11 +559,6 @@ func generateHeartbeatSeedsDnsNames(aerospikeVectorSearchConfig map[string]inter
 		return nil, err
 	}
 
-	heartbeatSeeds, err := getHeartbeatSeeds(aerospikeVectorSearchConfig)
-	if err != nil {
-		return nil, err
-	}
-
 	pod_name, heartbeatSeedDnsNameFormat, err := getDnsNameFormat(heartbeatSeeds["address"])
 	if err != nil {
 		return nil, err
@@ -577,16 +580,25 @@ func generateHeartbeatSeedsDnsNames(aerospikeVectorSearchConfig map[string]inter
 }
 
 func setHeartbeatSeeds(aerospikeVectorSearchConfig map[string]interface{}) error {
-
+	log.Println("Setting up heartbeat seeds...")
 	heartbeatSeedDnsNames, err := generateHeartbeatSeedsDnsNames(aerospikeVectorSearchConfig)
 	if err != nil {
 		return err
 	}
-
-	if heartbeat, ok := aerospikeVectorSearchConfig["heartbeat"].(map[string]interface{}); ok {
-		heartbeat["seeds"] = heartbeatSeedDnsNames
+	if heartbeatSeedDnsNames == nil {
+		log.Println("No heartbeat seed DNS names to configure - configuration will not include heartbeat section")
+		return nil
 	}
 
+	// Create heartbeat section if it doesn't exist
+	heartbeat, ok := aerospikeVectorSearchConfig["heartbeat"].(map[string]interface{})
+	if !ok {
+		log.Println("Creating new heartbeat section in configuration")
+		heartbeat = make(map[string]interface{})
+		aerospikeVectorSearchConfig["heartbeat"] = heartbeat
+	}
+	heartbeat["seeds"] = heartbeatSeedDnsNames
+	log.Printf("Successfully configured heartbeat with %d seed(s)", len(heartbeatSeedDnsNames))
 	return nil
 }
 
