@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -585,33 +586,80 @@ func setHeartbeatSeeds(aerospikeVectorSearchConfig map[string]interface{}) error
 	return nil
 }
 
-func writeConfig(aerospikeVectorSearchConfig map[string]interface{}) error {
-	log.Println("Starting writeConfig()")
-	configBytes, err := yaml.Marshal(aerospikeVectorSearchConfig)
-	if err != nil {
-		log.Println("Error marshalling config to YAML:", err)
-		return err
-	}
-
-	log.Printf("Final configuration:\n%s\n", string(configBytes))
-
-	file, err := os.Create(configFilePath)
-	if err != nil {
-		log.Println("Error creating config file:", err)
-		return err
-	}
-	defer func() {
-		if cerr := file.Close(); cerr != nil {
-			log.Println("Error closing config file:", cerr)
+func writeConfig(config map[string]interface{}) error {
+	// Validate mandatory fields
+	mandatoryFields := []string{"cluster", "feature-key-file", "aerospike", "service", "interconnect"}
+	for _, field := range mandatoryFields {
+		if _, ok := config[field]; !ok {
+			return fmt.Errorf("missing mandatory field: %s", field)
 		}
-	}()
-	_, err = file.Write(configBytes)
-	if err != nil {
-		log.Println("Error writing config file:", err)
-		return err
 	}
 
-	log.Printf("Configuration written successfully to %s\n", configFilePath)
+	// Validate cluster configuration
+	if cluster, ok := config["cluster"].(map[string]interface{}); ok {
+		if _, ok := cluster["cluster-name"]; !ok {
+			return fmt.Errorf("missing mandatory field: cluster.cluster-name")
+		}
+	} else {
+		return fmt.Errorf("invalid cluster configuration")
+	}
+
+	// Validate aerospike configuration
+	if aerospike, ok := config["aerospike"].(map[string]interface{}); ok {
+		if seeds, ok := aerospike["seeds"].([]interface{}); ok {
+			if len(seeds) == 0 {
+				return fmt.Errorf("aerospike.seeds cannot be empty")
+			}
+		} else {
+			return fmt.Errorf("invalid aerospike.seeds configuration")
+		}
+	} else {
+		return fmt.Errorf("invalid aerospike configuration")
+	}
+
+	// Validate service configuration
+	if service, ok := config["service"].(map[string]interface{}); ok {
+		if ports, ok := service["ports"].(map[string]interface{}); ok {
+			if len(ports) == 0 {
+				return fmt.Errorf("service.ports cannot be empty")
+			}
+		} else {
+			return fmt.Errorf("invalid service.ports configuration")
+		}
+	} else {
+		return fmt.Errorf("invalid service configuration")
+	}
+
+	// Validate interconnect configuration
+	if interconnect, ok := config["interconnect"].(map[string]interface{}); ok {
+		if ports, ok := interconnect["ports"].(map[string]interface{}); ok {
+			if len(ports) == 0 {
+				return fmt.Errorf("interconnect.ports cannot be empty")
+			}
+		} else {
+			return fmt.Errorf("invalid interconnect.ports configuration")
+		}
+	} else {
+		return fmt.Errorf("invalid interconnect configuration")
+	}
+
+	// Convert config to YAML
+	data, err := yaml.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config: %v", err)
+	}
+
+	// Create directory if it doesn't exist
+	dir := filepath.Dir(configFilePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create config directory: %v", err)
+	}
+
+	// Write config file
+	if err := os.WriteFile(configFilePath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write config file: %v", err)
+	}
+
 	return nil
 }
 
