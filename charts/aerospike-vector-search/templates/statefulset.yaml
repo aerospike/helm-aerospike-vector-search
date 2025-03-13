@@ -51,9 +51,6 @@ spec:
       {{- end }}
       volumes:
         - name: aerospike-vector-search
-          configMap:
-            name: {{ include "aerospike-vector-search.fullname" . }}
-        - name: podinfo
           emptyDir: {}
         - name: aerospike-secret
           secret:
@@ -96,8 +93,6 @@ spec:
           volumeMounts:
             - name: aerospike-vector-search
               mountPath: /etc/aerospike-vector-search
-            - name: podinfo
-              mountPath: /etc/podinfo
         {{- with .Values.initContainers }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -151,8 +146,6 @@ spec:
           volumeMounts:
             - name: aerospike-vector-search
               mountPath: /etc/aerospike-vector-search
-            - name: podinfo
-              mountPath: /etc/podinfo
             - name: aerospike-secret
               mountPath: /etc/aerospike-vector-search/secrets
               readOnly: true

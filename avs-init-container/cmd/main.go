@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,18 +28,11 @@ const (
 )
 
 var (
-	envFilePath  = "/etc/podinfo/JAVA_TOOL_OPTIONS"
-	cgroupV2File = "/sys/fs/cgroup/memory.max"
-	cgroupV1File = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
+	cgroupV2File   = "/sys/fs/cgroup/memory.max"
+	cgroupV1File   = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
+	configFilePath = AVS_CONFIG_FILE_PATH
+	getConfig      = rest.InClusterConfig
 )
-
-func getEnvFilePath() string {
-	return envFilePath
-}
-
-func setEnvFilePath(path string) {
-	envFilePath = path
-}
 
 func setCgroupPaths(v2path, v1path string) {
 	cgroupV2File = v2path
@@ -123,7 +115,7 @@ func calculateJvmOptions() (string, error) {
 	xmxBytes := memLimitBytes * 80 / 100
 	xmxMB := xmxBytes / 1024 / 1024
 
-	// Create the actual JVM options string defalult optimized settings (override with AEROSPIKE_VECTOR_SEARCH_JVM_OPTIONS if set)
+	// Create the JVM options string with optimized settings
 	jvmOptions := []string{
 		fmt.Sprintf("-Xmx%dm", xmxMB),
 		"-XX:+UseG1GC",                // Use G1 garbage collector
@@ -133,15 +125,6 @@ func calculateJvmOptions() (string, error) {
 
 	jvmOptionsStr := strings.Join(jvmOptions, " ")
 	log.Printf("Calculated JVM options: %s", jvmOptionsStr)
-
-	// Update the file path reference
-	if err := os.MkdirAll(filepath.Dir(getEnvFilePath()), 0755); err != nil {
-		return "", fmt.Errorf("failed to create podinfo directory: %v", err)
-	}
-	if err := os.WriteFile(getEnvFilePath(), []byte(jvmOptionsStr), 0644); err != nil {
-		return "", fmt.Errorf("failed to write JVM options to environment file: %v", err)
-	}
-	log.Printf("Wrote JVM options to %s", getEnvFilePath())
 
 	return jvmOptionsStr, nil
 }
@@ -282,7 +265,7 @@ func GetNodeInstance() (*v1.Node, *v1.Service, error) {
 		}
 		log.Printf("POD_NAMESPACE: %s\n", podNamespace)
 
-		config, err := rest.InClusterConfig()
+		config, err := getConfig()
 		if err != nil {
 			log.Println("Error getting in-cluster config:", err)
 			instance = &NodeInfoSingleton{err: err}
@@ -612,7 +595,7 @@ func writeConfig(aerospikeVectorSearchConfig map[string]interface{}) error {
 
 	log.Printf("Final configuration:\n%s\n", string(configBytes))
 
-	file, err := os.Create(AVS_CONFIG_FILE_PATH)
+	file, err := os.Create(configFilePath)
 	if err != nil {
 		log.Println("Error creating config file:", err)
 		return err
@@ -628,19 +611,12 @@ func writeConfig(aerospikeVectorSearchConfig map[string]interface{}) error {
 		return err
 	}
 
-	log.Printf("Configuration written successfully to %s\n", AVS_CONFIG_FILE_PATH)
+	log.Printf("Configuration written successfully to %s\n", configFilePath)
 	return nil
 }
 
 func run() int {
 	log.Println("Init container started")
-
-	// Calculate JVM options first so they're available immediately
-	_, err := calculateJvmOptions()
-	if err != nil {
-		log.Printf("Error calculating JVM options: %v", err)
-		return util.ToExitVal(err)
-	}
 
 	configEnv := os.Getenv("AEROSPIKE_VECTOR_SEARCH_CONFIG")
 	if configEnv == "" {
@@ -649,7 +625,7 @@ func run() int {
 	}
 
 	var aerospikeVectorSearchConfig map[string]interface{}
-	err = json.Unmarshal([]byte(configEnv), &aerospikeVectorSearchConfig)
+	err := json.Unmarshal([]byte(configEnv), &aerospikeVectorSearchConfig)
 	if err != nil {
 		log.Println("Error unmarshalling AEROSPIKE_VECTOR_SEARCH_CONFIG:", err)
 		return util.ToExitVal(err)
@@ -681,6 +657,19 @@ func run() int {
 		log.Println("Error writing config:", err)
 		return util.ToExitVal(err)
 	}
+
+	// Handle JVM options at the end
+	jvmOpts, err := getJvmOptions()
+	if err != nil {
+		log.Printf("Error getting JVM options: %v", err)
+		return util.ToExitVal(err)
+	}
+
+	if err := os.Setenv("JAVA_TOOL_OPTIONS", jvmOpts); err != nil {
+		log.Printf("Error setting JAVA_TOOL_OPTIONS: %v", err)
+		return util.ToExitVal(err)
+	}
+	log.Printf("Set JAVA_TOOL_OPTIONS to: %s", jvmOpts)
 
 	log.Println("Init container completed successfully")
 	return util.ToExitVal(nil)
