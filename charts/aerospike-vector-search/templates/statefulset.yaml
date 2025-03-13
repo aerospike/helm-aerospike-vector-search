@@ -68,10 +68,7 @@ spec:
           imagePullPolicy: {{ .Values.initContainer.image.pullPolicy | default "IfNotPresent" }}
           env:
             - name: AEROSPIKE_VECTOR_SEARCH_CONFIG
-              valueFrom:
-                configMapKeyRef:
-                  name: {{ include "aerospike-vector-search.fullname" . }}
-                  key: aerospike-vector-search.yml
+              value: {{ .Values.aerospikeVectorSearchConfig | toJson | quote }}
             - name: NODE_NAME
               valueFrom:
                 fieldRef:
