@@ -18,7 +18,7 @@ env:
     CHART_NAME: 'aerospike-vector-search'
 jobs:
   setup:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     outputs:
       chart_version: ${{ steps.version.outputs.chart_version }}
     steps:
@@ -39,7 +39,7 @@ jobs:
           echo "chart_version=${CHART_VERSION}" >> $GITHUB_OUTPUT
 
   build-chart:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     needs: setup
     steps:
       - name: Checkout current repository
@@ -86,7 +86,7 @@ jobs:
   build-init-container:
     needs:
       - setup
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps: 
       - name: 'Git checkout'
         uses: actions/checkout@v4
@@ -166,7 +166,7 @@ jobs:
       - build-chart
       - build-init-container
       - setup
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - name: setup jfrog
         uses: jfrog/setup-jfrog-cli@f748a0599171a192a2668afee8d0497f7c1069df #  v4.5.6
