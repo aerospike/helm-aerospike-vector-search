@@ -71,6 +71,7 @@ func getEndpointByMode() (string, int32, error) {
 		return "", 0, err
 	}
 
+	// Determine node IP: prefer external, then internal.
 	var nodeIP string
 	for _, addr := range node.Status.Addresses {
 		if addr.Type == v1.NodeExternalIP {
@@ -93,16 +94,21 @@ func getEndpointByMode() (string, int32, error) {
 	switch networkMode {
 	case NetworkModeNodePort:
 		if service != nil && service.Spec.Type == v1.ServiceTypeNodePort {
+			var nodePort int32
 			for _, port := range service.Spec.Ports {
 				if port.NodePort != 0 {
+					nodePort = port.NodePort
 					logger.Info("Found node port", zap.Int32("port", port.NodePort))
-					return nodeIP, port.NodePort, nil
+					break
 				}
 			}
-			logger.Warn("NodePort not found; defaulting to internal networking")
+			if nodePort != 0 {
+				return nodeIP, nodePort, nil
+			}
+			logger.Warn("NodePort not found; defaulting to internal networking (no advertised listener update)")
 			return "", 0, nil
 		}
-		logger.Warn("Service is nil or not NodePort; defaulting to internal networking")
+		logger.Warn("Service is nil or not NodePort; defaulting to internal networking  (no advertised listener update)")
 		return "", 0, nil
 
 	case NetworkModeHostNetwork:
@@ -114,7 +120,11 @@ func getEndpointByMode() (string, int32, error) {
 		if err != nil {
 			return "", 0, fmt.Errorf("invalid CONTAINER_PORT value: %s", containerPortStr)
 		}
+		if containerPort < 0 || containerPort > 65535 {
+			return "", 0, fmt.Errorf("CONTAINER_PORT value out of range: %d", containerPort)
+		}
 		logger.Info("Using CONTAINER_PORT", zap.Int("port", containerPort))
+
 		return nodeIP, int32(containerPort), nil
 
 	default:
