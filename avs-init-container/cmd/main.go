@@ -52,6 +52,11 @@ func initLogger() {
 }
 
 func getEndpointByMode() (string, int32, error) {
+	// Default to nodeport if NETWORK_MODE is not set.
+	// We will try to get the nodeport from the service if it is a NodePort service.
+	// Otherwise, we will default to internal networking.
+	// If NETWORK_MODE is set to hostnetwork, we will use the CONTAINER_PORT environment
+	// variable to get the port.
 	modeStr := os.Getenv("NETWORK_MODE")
 	var networkMode NetworkMode
 	if modeStr == "" {
