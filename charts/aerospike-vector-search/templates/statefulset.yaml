@@ -61,8 +61,8 @@ spec:
         {{- end }}
       initContainers:
         - name: config-injector
-          image: {{ .Values.initContainer.image.repository }}":"{{ .Values.initContainer.image.tag }}
-          imagePullPolicy: {{ .Values.initContainer.image.pullPolicy | default "IfNotPresent" }}
+          image: {{ .Values.initContainer.image.repository }}:{{ .Values.initContainer.image.tag }}
+          imagePullPolicy: {{ .Values.initContainer.image.pullPolicy |default "IfNotPresent" }}
           env:
             - name: AEROSPIKE_VECTOR_SEARCH_CONFIG
               value: {{ .Values.aerospikeVectorSearchConfig | toJson | quote }}
