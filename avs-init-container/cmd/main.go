@@ -1,14 +1,17 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"aerospike.com/avs-init-container/v2/util"
 	v1 "k8s.io/api/core/v1"
@@ -94,7 +97,11 @@ func getEndpointByMode() (string, int32, error) {
 				}
 			}
 			if nodePort != 0 {
-				return nodeIP, nodePort, nil
+				nodeAddr, err := getDnsNameByNodeIP(nodeIP, networkMode)
+				if err != nil {
+					fmt.Println(err)
+				}
+				return nodeAddr, nodePort, nil
 			}
 			log.Println("NodePort not found; defaulting to internal networking (no advertised listener update)")
 			return "", 0, nil
@@ -116,7 +123,12 @@ func getEndpointByMode() (string, int32, error) {
 		}
 		log.Println("CONTAINER_PORT:", containerPortStr, "for hostnetwork mode")
 
-		return nodeIP, int32(containerPort), nil
+		nodeAddr, err := getDnsNameByNodeIP(nodeIP, networkMode)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		return nodeAddr, int32(containerPort), nil
 
 	default:
 		return "", 0, fmt.Errorf("unsupported NETWORK_MODE: %s", networkMode)
@@ -536,6 +548,82 @@ func run() int {
 
 	log.Println("Init container completed successfully")
 	return util.ToExitVal(nil)
+}
+
+func getDnsNameByNodeIP(nodeIP string, networkMode NetworkMode) (string, error) {
+	var resolvConfPath string
+	switch networkMode {
+	case NetworkModeNodePort:
+		resolvConfPath = "/etc/host-resolv.conf"
+	case NetworkModeHostNetwork:
+		resolvConfPath = "/etc/resolv.host"
+	default:
+		return "", fmt.Errorf("NetworkMode %s is not supported", networkMode)
+	}
+	nameservers, err := getNameservers(resolvConfPath)
+	if err != nil {
+		return nodeIP, err
+	}
+	dnsName, err := resolveNodeIpToDnsName(nodeIP, nameservers)
+	if err != nil {
+		return nodeIP, err
+	}
+	return dnsName, nil
+}
+
+func getNameservers(resolvFile string) ([]string, error) {
+	file, err := os.Open(resolvFile)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var nameservers []string
+	scanner := bufio.NewScanner(file)
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "nameserver") {
+			fields := strings.Fields(line)
+			if len(fields) > 1 {
+				nameservers = append(nameservers, fields[1]+":53")
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return nameservers, nil
+}
+
+func createResolver(dnsServer string) *net.Resolver {
+	return &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			d := net.Dialer{Timeout: 5 * time.Second}
+			return d.DialContext(ctx, "udp", dnsServer)
+		},
+	}
+}
+
+func resolveNodeIpToDnsName(nodeIP string, nameservers []string) (string, error) {
+	var lastErr error
+	for _, dnsServer := range nameservers {
+		fmt.Println("Trying Reverse DNS on", dnsServer)
+
+		resolver := createResolver(dnsServer)
+
+		dnsNames, err := resolver.LookupAddr(context.Background(), nodeIP)
+		if err == nil {
+			return dnsNames[0], nil
+		}
+
+		fmt.Println("Reverse DNS failed with", dnsServer, ":", err)
+		lastErr = err
+	}
+
+	return "", lastErr
 }
 
 func main() {

@@ -56,6 +56,11 @@ spec:
           volumeMounts:
             - name: aerospike-vector-search
               mountPath: /etc/aerospike-vector-search
+          {{- if not .Values.multiPodPerHost }}
+            - name: resolv-conf
+              mountPath: /etc/host-resolv.conf
+              subPath: resolv.conf
+          {{- end }}
           env:
             - name: NETWORK_MODE
               value: {{ if .Values.multipodPerHost }}{{ quote "nodeport" }}{{ else }}{{ quote "hostnetwork" }}{{ end }}
@@ -170,6 +175,12 @@ spec:
           secret:
             secretName: aerospike-secret
             optional: false
+        {{- if not .Values.multiPodPerHost }}
+        - name: resolv-conf
+          hostPath:
+            path: /etc/resolv.conf
+            type: File
+        {{- end }}
       {{- with .Values.extraVolumes }}
         {{- toYaml . | nindent 8 }}
       {{- end }}
