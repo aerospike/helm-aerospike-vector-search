@@ -47,7 +47,7 @@ jobs:
 
 
       - name: setup GPG
-        uses: aerospike/shared-workflows/.github/devops/setup-gpg@dda8173aca1f1e73f95267572a7d3849cd00f1b8
+        uses: aerospike/shared-workflows/.github/actions/setup-gpg@dda8173aca1f1e73f95267572a7d3849cd00f1b8
         with:
           gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
           gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
