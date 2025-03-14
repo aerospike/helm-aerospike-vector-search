@@ -19,10 +19,6 @@ jobs:
 
     - name: Install dependencies
       run: |
-        cd helm-aerospike-vector-search/avs-init-container/cmd
-        go mod download
-
-    - name: Run tests
-      run: |
         cd avs-init-container/cmd
+        go mod download
         go test -v ./...
