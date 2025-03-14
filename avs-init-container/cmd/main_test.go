@@ -933,28 +933,36 @@ func Test_getHeartbeatSeeds(t *testing.T) {
 }
 
 func TestGetJvmOptions(t *testing.T) {
-	// Save original env var and restore after test
-	originalJvmOpts := os.Getenv("AEROSPIKE_VECTOR_SEARCH_JVM_OPTIONS")
-	defer os.Setenv("AEROSPIKE_VECTOR_SEARCH_JVM_OPTIONS", originalJvmOpts)
+	// Create temp dir for test
+	tmpDir := t.TempDir()
+	originalJvmOptsPath := jvmOptsFilePath
+	jvmOptsFilePath = filepath.Join(tmpDir, "etc", "aerospike-vector-search", "jvm.opts")
+
+	// Create the directory for the file
+	err := os.MkdirAll(filepath.Dir(jvmOptsFilePath), 0755)
+	if err != nil {
+		t.Fatalf("Failed to create directory: %v", err)
+	}
+
+	defer func() {
+		jvmOptsFilePath = originalJvmOptsPath
+	}()
 
 	tests := []struct {
 		name          string
 		envValue      string
-		expectedOpts  string
 		expectError   bool
 		errorContains string
 	}{
 		{
-			name:         "Custom JVM options provided",
-			envValue:     "-Xmx2g -XX:+UseG1GC",
-			expectedOpts: "-Xmx2g -XX:+UseG1GC",
-			expectError:  false,
+			name:        "Custom JVM options provided",
+			envValue:    "-Xmx2g -XX:+UseG1GC",
+			expectError: false,
 		},
 		{
-			name:         "Empty env var - should calculate",
-			envValue:     "",
-			expectedOpts: "", // We'll check this separately since it's dynamic
-			expectError:  false,
+			name:        "Empty env var - should calculate",
+			envValue:    "",
+			expectError: false,
 		},
 	}
 
@@ -963,35 +971,48 @@ func TestGetJvmOptions(t *testing.T) {
 			os.Setenv("AEROSPIKE_VECTOR_SEARCH_JVM_OPTIONS", tt.envValue)
 
 			opts, err := getJvmOptions()
-
-			if tt.expectError {
-				if err == nil {
-					t.Error("Expected error but got none")
-				}
-				if tt.errorContains != "" && !strings.Contains(err.Error(), tt.errorContains) {
-					t.Errorf("Expected error to contain %q, got %v", tt.errorContains, err)
-				}
+			if (err != nil) != tt.expectError {
+				t.Errorf("getJvmOptions() error = %v, wantErr %v", err, tt.expectError)
 				return
 			}
 
+			// Write the options to file
+			err = writeJvmOptions(opts)
 			if err != nil {
-				t.Errorf("Unexpected error: %v", err)
+				t.Errorf("Failed to write JVM options: %v", err)
+				return
+			}
+
+			// Verify file is written with correct content
+			content, err := os.ReadFile(jvmOptsFilePath)
+			if err != nil {
+				t.Errorf("Failed to read JVM options file: %v", err)
 				return
 			}
 
 			if tt.envValue != "" {
 				// For custom options, expect exact match
-				if opts != tt.expectedOpts {
-					t.Errorf("Expected %q, got %q", tt.expectedOpts, opts)
+				if string(content) != tt.envValue {
+					t.Errorf("Expected file content to be %q, got %q", tt.envValue, string(content))
+				}
+				if opts != tt.envValue {
+					t.Errorf("Expected opts to be %q, got %q", tt.envValue, opts)
 				}
 			} else {
 				// For calculated options, verify format
-				if !strings.Contains(opts, "-Xmx") {
+				if !strings.Contains(string(content), "-Xmx") {
 					t.Error("Expected calculated options to contain -Xmx")
 				}
-				if !strings.Contains(opts, "-XX:+UseG1GC") {
-					t.Error("Expected calculated options to contain -XX:+UseG1GC")
-				}
+			}
+
+			// Check file permissions
+			info, err := os.Stat(jvmOptsFilePath)
+			if err != nil {
+				t.Errorf("Failed to stat JVM options file: %v", err)
+				return
+			}
+			if info.Mode().Perm() != 0644 {
+				t.Errorf("Expected file permissions 0644, got %v", info.Mode().Perm())
 			}
 		})
 	}
@@ -1047,15 +1068,15 @@ func TestCalculateJvmOptions(t *testing.T) {
 			if !strings.Contains(opts, "-Xmx") {
 				t.Error("Expected calculated options to contain -Xmx")
 			}
-			if !strings.Contains(opts, "-XX:+UseG1GC") {
-				t.Error("Expected calculated options to contain -XX:+UseG1GC")
-			}
-			if !strings.Contains(opts, "-XX:+ParallelRefProcEnabled") {
-				t.Error("Expected calculated options to contain -XX:+ParallelRefProcEnabled")
-			}
-			if !strings.Contains(opts, "-XX:+UseStringDeduplication") {
-				t.Error("Expected calculated options to contain -XX:+UseStringDeduplication")
-			}
+			// if !strings.Contains(opts, "-XX:+UseG1GC") {
+			// 	t.Error("Expected calculated options to contain -XX:+UseG1GC")
+			// }
+			// if !strings.Contains(opts, "-XX:+ParallelRefProcEnabled") {
+			// 	t.Error("Expected calculated options to contain -XX:+ParallelRefProcEnabled")
+			// }
+			// if !strings.Contains(opts, "-XX:+UseStringDeduplication") {
+			// 	t.Error("Expected calculated options to contain -XX:+UseStringDeduplication")
+			// }
 		})
 	}
 }
@@ -1175,6 +1196,92 @@ func TestReadCgroupMemoryLimit(t *testing.T) {
 				if limit != expected {
 					t.Errorf("Expected %d, got %d", expected, limit)
 				}
+			}
+		})
+	}
+}
+
+func TestWriteJvmOptions(t *testing.T) {
+	tmpDir := t.TempDir()
+	originalJvmOptsPath := jvmOptsFilePath
+	jvmOptsFilePath = filepath.Join(tmpDir, "etc", "aerospike-vector-search", "jvm.opts")
+
+	// Create the directory for the file
+	err := os.MkdirAll(filepath.Dir(jvmOptsFilePath), 0755)
+	if err != nil {
+		t.Fatalf("Failed to create directory: %v", err)
+	}
+
+	defer func() {
+		jvmOptsFilePath = originalJvmOptsPath
+	}()
+
+	tests := []struct {
+		name          string
+		envValue      string
+		expectError   bool
+		errorContains string
+	}{
+		{
+			name:        "Custom JVM options provided",
+			envValue:    "-Xmx2g -XX:+UseG1GC",
+			expectError: false,
+		},
+		{
+			name:        "Empty env var - should calculate",
+			envValue:    "",
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Setenv("AEROSPIKE_VECTOR_SEARCH_JVM_OPTIONS", tt.envValue)
+
+			opts, err := getJvmOptions()
+			if err != nil {
+				t.Errorf("Unexpected error getting JVM options: %v", err)
+				return
+			}
+
+			// Write the options to file
+			err = writeJvmOptions(opts)
+			if err != nil {
+				t.Errorf("Failed to write JVM options: %v", err)
+				return
+			}
+
+			// Verify file is written
+			content, err := os.ReadFile(jvmOptsFilePath)
+			if err != nil {
+				t.Errorf("Failed to read JVM options file: %v", err)
+				return
+			}
+
+			if tt.envValue != "" {
+				// For custom options, expect exact match
+				if string(content) != tt.envValue {
+					t.Errorf("Expected file content to be %q, got %q", tt.envValue, string(content))
+				}
+				if opts != tt.envValue {
+					t.Errorf("Expected opts to be %q, got %q", tt.envValue, opts)
+				}
+			} else {
+				// For calculated options, verify format
+				// Note: we used to set a list of options but now just set heap size
+				if !strings.Contains(string(content), "-Xmx") {
+					t.Error("Expected calculated options to contain -Xmx")
+				}
+			}
+
+			// Check file permissions
+			info, err := os.Stat(jvmOptsFilePath)
+			if err != nil {
+				t.Errorf("Failed to stat JVM options file: %v", err)
+				return
+			}
+			if info.Mode().Perm() != 0644 {
+				t.Errorf("Expected file permissions 0644, got %v", info.Mode().Perm())
 			}
 		})
 	}

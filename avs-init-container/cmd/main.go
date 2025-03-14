@@ -25,14 +25,16 @@ const (
 	AVS_NODE_LABEL_KEY   = "aerospike.io/role-label"
 	NODE_ROLES_KEY       = "node-roles"
 	AVS_CONFIG_FILE_PATH = "/etc/aerospike-vector-search/aerospike-vector-search.yml"
-	JVM_OPTS_FILE_PATH   = "/etc/aerospike-vector-search/jvm.opts"
 )
 
+// our simple tests potentially overrride these variables.
+// TODO: better test fixture handling
 var (
-	cgroupV2File   = "/sys/fs/cgroup/memory.max"
-	cgroupV1File   = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
-	configFilePath = AVS_CONFIG_FILE_PATH
-	getConfig      = rest.InClusterConfig
+	cgroupV2File    = "/sys/fs/cgroup/memory.max"
+	cgroupV1File    = "/sys/fs/cgroup/memory/memory.limit_in_bytes"
+	configFilePath  = AVS_CONFIG_FILE_PATH
+	jvmOptsFilePath = "/etc/aerospike-vector-search/jvm.opts"
+	getConfig       = rest.InClusterConfig
 )
 
 func setCgroupPaths(v2path, v1path string) {
@@ -119,9 +121,10 @@ func calculateJvmOptions() (string, error) {
 	// Create the JVM options string with optimized settings
 	jvmOptions := []string{
 		fmt.Sprintf("-Xmx%dm", xmxMB),
-		"-XX:+UseG1GC",                // Use G1 garbage collector
-		"-XX:+ParallelRefProcEnabled", // Enable parallel reference processing
-		"-XX:+UseStringDeduplication", // Enable string deduplication
+		// No longer try to set these other JVM options. We are trusting the container defaults.
+		// "-XX:+UseG1GC",
+		// "-XX:+ParallelRefProcEnabled",
+		// "-XX:+UseStringDeduplication",
 	}
 
 	jvmOptionsStr := strings.Join(jvmOptions, " ")
@@ -663,6 +666,20 @@ func writeConfig(config map[string]interface{}) error {
 	return nil
 }
 
+func writeJvmOptions(opts string) error {
+	// Create the directory if it doesn't exist
+	if err := os.MkdirAll(filepath.Dir(jvmOptsFilePath), 0755); err != nil {
+		return fmt.Errorf("failed to create directory for JVM options file: %v", err)
+	}
+
+	// Write the options to file with 0644 permissions
+	if err := os.WriteFile(jvmOptsFilePath, []byte(opts), 0644); err != nil {
+		return fmt.Errorf("failed to write JVM options file: %v", err)
+	}
+
+	return nil
+}
+
 func run() int {
 	log.Println("Init container started")
 
@@ -713,11 +730,19 @@ func run() int {
 		return util.ToExitVal(err)
 	}
 
-	if err := os.Setenv("JAVA_TOOL_OPTIONS", jvmOpts); err != nil {
-		log.Printf("Error setting JAVA_TOOL_OPTIONS: %v", err)
+	// Set environment variable
+	if err := os.Setenv("JAVA_OPTS", jvmOpts); err != nil {
+		log.Printf("Error setting JAVA_OPTS: %v", err)
 		return util.ToExitVal(err)
 	}
-	log.Printf("Set JAVA_TOOL_OPTIONS to: %s", jvmOpts)
+	log.Printf("Set JAVA_OPTS to: %s", jvmOpts)
+
+	// Write JVM options to file
+	if err := writeJvmOptions(jvmOpts); err != nil {
+		log.Printf("Error writing JVM options to file: %v", err)
+		return util.ToExitVal(err)
+	}
+	log.Printf("Wrote JVM options to file: %s", jvmOptsFilePath)
 
 	log.Println("Init container completed successfully")
 	return util.ToExitVal(nil)
