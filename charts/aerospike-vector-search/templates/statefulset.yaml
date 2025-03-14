@@ -61,7 +61,7 @@ spec:
         {{- end }}
       initContainers:
         - name: config-injector
-          image: {{ .Values.initContainer.image.repository }}:{{ .Values.initContainer.image.tag }}
+          image: "{{ .Values.initContainer.image.repository }}:{{ .Values.initContainer.image.tag | default .Chart.Version }}"
           imagePullPolicy: {{ .Values.initContainer.image.pullPolicy |default "IfNotPresent" }}
           env:
             - name: AEROSPIKE_VECTOR_SEARCH_CONFIG
