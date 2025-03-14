@@ -18,7 +18,7 @@ env:
     CHART_NAME: 'aerospike-vector-search'
 jobs:
   setup:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     outputs:
       chart_version: ${{ steps.version.outputs.chart_version }}
     steps:
@@ -39,7 +39,7 @@ jobs:
           echo "chart_version=${CHART_VERSION}" >> $GITHUB_OUTPUT
 
   build-chart:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: setup
     steps:
       - name: Checkout current repository
@@ -47,12 +47,11 @@ jobs:
 
 
       - name: setup GPG
-        uses: aerospike/shared-workflows/devops/setup-gpg@dda8173aca1f1e73f95267572a7d3849cd00f1b8 # v1.0.0
+        uses: aerospike/shared-workflows/.github/actions/setup-gpg@dda8173aca1f1e73f95267572a7d3849cd00f1b8
         with:
           gpg-private-key: ${{ secrets.GPG_SECRET_KEY }}
           gpg-public-key: ${{ secrets.GPG_PUBLIC_KEY }}
           gpg-key-pass: ${{ secrets.GPG_PASS }}
-          gpg-key-name: "aerospike-inc"
           
       - name: setup jfrog
         uses: jfrog/setup-jfrog-cli@v4
@@ -86,7 +85,7 @@ jobs:
   build-init-container:
     needs:
       - setup
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps: 
       - name: 'Git checkout'
         uses: actions/checkout@v4
@@ -166,7 +165,7 @@ jobs:
       - build-chart
       - build-init-container
       - setup
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - name: setup jfrog
         uses: jfrog/setup-jfrog-cli@f748a0599171a192a2668afee8d0497f7c1069df #  v4.5.6

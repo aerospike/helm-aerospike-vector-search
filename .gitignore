@@ -1,3 +1,4 @@
 .idea/*
 .DS_Store
 examples/kind/config/features.conf
+avs-init-container/cmd/cmd
