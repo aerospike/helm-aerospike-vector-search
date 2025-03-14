@@ -1,4 +1,7 @@
 name: Test init container (unit)
+permissions:
+  contents: read
+  pull-requests: write
 
 on:
   push:
