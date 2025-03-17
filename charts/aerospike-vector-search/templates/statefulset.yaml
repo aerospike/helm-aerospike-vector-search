@@ -141,7 +141,7 @@ spec:
           command:
             - /bin/sh
             - -c
-            - "export JAVA_TOOL_OPTIONS=$(cat /etc/aerospike-vector-search/jvm.opts) && exec /usr/bin/as-tini-static -r SIGUSR1 -t SIGTERM -e 143 -- /opt/aerospike-vector-search/bin/aerospike-vector-search -f /etc/aerospike-vector-search/aerospike-vector-search.yml"
+            - "export JAVA_OPTS=$(cat /etc/aerospike-vector-search/jvm.opts) && exec /usr/bin/as-tini-static -r SIGUSR1 -t SIGTERM -e 143 -- /opt/aerospike-vector-search/bin/aerospike-vector-search -f /etc/aerospike-vector-search/aerospike-vector-search.yml"
           volumeMounts:
             - name: aerospike-vector-search
               mountPath: /etc/aerospike-vector-search
