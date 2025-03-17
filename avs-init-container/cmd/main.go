@@ -590,61 +590,62 @@ func setHeartbeatSeeds(aerospikeVectorSearchConfig map[string]interface{}) error
 }
 
 func writeConfig(config map[string]interface{}) error {
-	// Validate mandatory fields
-	mandatoryFields := []string{"cluster", "feature-key-file", "aerospike", "service", "interconnect"}
-	for _, field := range mandatoryFields {
-		if _, ok := config[field]; !ok {
-			return fmt.Errorf("missing mandatory field: %s", field)
-		}
-	}
+	// Moving validation to its own PR
+	// // Validate mandatory fields
+	// mandatoryFields := []string{"cluster", "feature-key-file", "service", "interconnect"} // TODO: aerospike/storage not included.
+	// for _, field := range mandatoryFields {
+	// 	if _, ok := config[field]; !ok {
+	// 		return fmt.Errorf("missing mandatory field: %s", field)
+	// 	}
+	// }
 
-	// Validate cluster configuration
-	if cluster, ok := config["cluster"].(map[string]interface{}); ok {
-		if _, ok := cluster["cluster-name"]; !ok {
-			return fmt.Errorf("missing mandatory field: cluster.cluster-name")
-		}
-	} else {
-		return fmt.Errorf("invalid cluster configuration")
-	}
+	// // Validate cluster configuration
+	// if cluster, ok := config["cluster"].(map[string]interface{}); ok {
+	// 	if _, ok := cluster["cluster-name"]; !ok {
+	// 		return fmt.Errorf("missing mandatory field: cluster.cluster-name")
+	// 	}
+	// } else {
+	// 	return fmt.Errorf("invalid cluster configuration")
+	// }
 
-	// Validate aerospike configuration
-	if aerospike, ok := config["aerospike"].(map[string]interface{}); ok {
-		if seeds, ok := aerospike["seeds"].([]interface{}); ok {
-			if len(seeds) == 0 {
-				return fmt.Errorf("aerospike.seeds cannot be empty")
-			}
-		} else {
-			return fmt.Errorf("invalid aerospike.seeds configuration")
-		}
-	} else {
-		return fmt.Errorf("invalid aerospike configuration")
-	}
+	// // Validate aerospike configuration
+	// if aerospike, ok := config["aerospike"].(map[string]interface{}); ok {
+	// 	if seeds, ok := aerospike["seeds"].([]interface{}); ok {
+	// 		if len(seeds) == 0 {
+	// 			return fmt.Errorf("aerospike.seeds cannot be empty")
+	// 		}
+	// 	} else {
+	// 		return fmt.Errorf("invalid aerospike.seeds configuration")
+	// 	}
+	// } else {
+	// 	return fmt.Errorf("invalid aerospike configuration")
+	// }
 
-	// Validate service configuration
-	if service, ok := config["service"].(map[string]interface{}); ok {
-		if ports, ok := service["ports"].(map[string]interface{}); ok {
-			if len(ports) == 0 {
-				return fmt.Errorf("service.ports cannot be empty")
-			}
-		} else {
-			return fmt.Errorf("invalid service.ports configuration")
-		}
-	} else {
-		return fmt.Errorf("invalid service configuration")
-	}
+	// // Validate service configuration
+	// if service, ok := config["service"].(map[string]interface{}); ok {
+	// 	if ports, ok := service["ports"].(map[string]interface{}); ok {
+	// 		if len(ports) == 0 {
+	// 			return fmt.Errorf("service.ports cannot be empty")
+	// 		}
+	// 	} else {
+	// 		return fmt.Errorf("invalid service.ports configuration")
+	// 	}
+	// } else {
+	// 	return fmt.Errorf("invalid service configuration")
+	// }
 
-	// Validate interconnect configuration
-	if interconnect, ok := config["interconnect"].(map[string]interface{}); ok {
-		if ports, ok := interconnect["ports"].(map[string]interface{}); ok {
-			if len(ports) == 0 {
-				return fmt.Errorf("interconnect.ports cannot be empty")
-			}
-		} else {
-			return fmt.Errorf("invalid interconnect.ports configuration")
-		}
-	} else {
-		return fmt.Errorf("invalid interconnect configuration")
-	}
+	// // Validate interconnect configuration
+	// if interconnect, ok := config["interconnect"].(map[string]interface{}); ok {
+	// 	if ports, ok := interconnect["ports"].(map[string]interface{}); ok {
+	// 		if len(ports) == 0 {
+	// 			return fmt.Errorf("interconnect.ports cannot be empty")
+	// 		}
+	// 	} else {
+	// 		return fmt.Errorf("invalid interconnect.ports configuration")
+	// 	}
+	// } else {
+	// 	return fmt.Errorf("invalid interconnect configuration")
+	// }
 
 	// Convert config to YAML
 	data, err := yaml.Marshal(config)
