@@ -412,6 +412,7 @@ func getAerospikeVectorSearchRoles() (map[string]interface{}, error) {
 		return nil, err
 	}
 
+	log.Printf("Available roles: %v", roles)
 	if role, ok := roles[label]; ok {
 		log.Printf("Found role for label %s: %v\n", label, role)
 		return map[string]interface{}{NODE_ROLES_KEY: role}, nil
