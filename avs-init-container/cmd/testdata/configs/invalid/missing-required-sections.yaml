@@ -1,0 +1,8 @@
+cluster:
+  cluster-name: "test-cluster"
+# Missing feature-key-file
+# Missing aerospike/storage
+service:
+  ports:
+    "5000": {}
+# Missing interconnect 

@@ -1,0 +1,1 @@
+This is a temporary copy of the schema. Eventual destination will be its own repo.

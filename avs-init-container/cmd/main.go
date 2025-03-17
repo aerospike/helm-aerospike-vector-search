@@ -12,13 +12,16 @@ import (
 	"sync"
 	"syscall"
 
+	_ "embed"
+
 	"aerospike.com/avs-init-container/v2/util"
+	"github.com/xeipuuv/gojsonschema"
+	"gopkg.in/yaml.v3"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-	"sigs.k8s.io/yaml"
 )
 
 const (
@@ -36,6 +39,9 @@ var (
 	jvmOptsFilePath = "/etc/aerospike-vector-search/jvm.opts"
 	getConfig       = rest.InClusterConfig
 )
+
+//go:embed resources/schemas/json/avs/1.1.0.json
+var configSchema string
 
 func setCgroupPaths(v2path, v1path string) {
 	cgroupV2File = v2path
@@ -588,68 +594,80 @@ func setHeartbeatSeeds(aerospikeVectorSearchConfig map[string]interface{}) error
 	log.Printf("Successfully configured heartbeat with %d seed(s)", len(heartbeatSeedDnsNames))
 	return nil
 }
+// FIXME: is this really needed? 
+// Helper function to convert interface{} maps to string maps recursively
+func convertToStringMap(v interface{}) interface{} {
+	switch x := v.(type) {
+	case map[interface{}]interface{}:
+		m := make(map[string]interface{})
+		for k, v := range x {
+			m[fmt.Sprint(k)] = convertToStringMap(v)
+		}
+		return m
+	case map[string]interface{}:
+		m := make(map[string]interface{})
+		for k, v := range x {
+			m[k] = convertToStringMap(v)
+		}
+		return m
+	case []interface{}:
+		for i, v := range x {
+			x[i] = convertToStringMap(v)
+		}
+	}
+	return v
+}
 
 func writeConfig(config map[string]interface{}) error {
-	// Validate mandatory fields
-	mandatoryFields := []string{"cluster", "feature-key-file", "aerospike", "service", "interconnect"}
-	for _, field := range mandatoryFields {
-		if _, ok := config[field]; !ok {
-			return fmt.Errorf("missing mandatory field: %s", field)
-		}
-	}
+	// Convert all map keys to strings recursively
+	// unfortunately it seems that the interrface maps are not supported by our validation
+	// so we need to convert them to string maps
+	typedConfig := convertToStringMap(config).(map[string]interface{})
 
-	// Validate cluster configuration
-	if cluster, ok := config["cluster"].(map[string]interface{}); ok {
-		if _, ok := cluster["cluster-name"]; !ok {
-			return fmt.Errorf("missing mandatory field: cluster.cluster-name")
+	// Custom validation rules
+	if _, hasAerospike := typedConfig["aerospike"]; hasAerospike {
+		if _, hasStorage := typedConfig["storage"]; hasStorage {
+			return fmt.Errorf("cannot have both aerospike and storage sections")
 		}
-	} else {
-		return fmt.Errorf("invalid cluster configuration")
-	}
-
-	// Validate aerospike configuration
-	if aerospike, ok := config["aerospike"].(map[string]interface{}); ok {
-		if seeds, ok := aerospike["seeds"].([]interface{}); ok {
+		if seeds, ok := typedConfig["aerospike"].(map[string]interface{})["seeds"].([]interface{}); ok {
 			if len(seeds) == 0 {
-				return fmt.Errorf("aerospike.seeds cannot be empty")
+				return fmt.Errorf("seeds cannot be empty")
 			}
-		} else {
-			return fmt.Errorf("invalid aerospike.seeds configuration")
 		}
-	} else {
-		return fmt.Errorf("invalid aerospike configuration")
+	}
+	if _, hasStorage := typedConfig["storage"]; hasStorage {
+		if seeds, ok := typedConfig["storage"].(map[string]interface{})["seeds"].([]interface{}); ok {
+			if len(seeds) == 0 {
+				return fmt.Errorf("seeds cannot be empty")
+			}
+		}
 	}
 
-	// Validate service configuration
-	if service, ok := config["service"].(map[string]interface{}); ok {
-		if ports, ok := service["ports"].(map[string]interface{}); ok {
-			if len(ports) == 0 {
-				return fmt.Errorf("service.ports cannot be empty")
-			}
-		} else {
-			return fmt.Errorf("invalid service.ports configuration")
-		}
-	} else {
-		return fmt.Errorf("invalid service configuration")
-	}
-
-	// Validate interconnect configuration
-	if interconnect, ok := config["interconnect"].(map[string]interface{}); ok {
-		if ports, ok := interconnect["ports"].(map[string]interface{}); ok {
-			if len(ports) == 0 {
-				return fmt.Errorf("interconnect.ports cannot be empty")
-			}
-		} else {
-			return fmt.Errorf("invalid interconnect.ports configuration")
-		}
-	} else {
-		return fmt.Errorf("invalid interconnect configuration")
-	}
-
-	// Convert config to YAML
-	data, err := yaml.Marshal(config)
+	// Load and validate against schema
+	schemaLoader := gojsonschema.NewStringLoader(configSchema)
+	schema, err := gojsonschema.NewSchema(schemaLoader)
 	if err != nil {
-		return fmt.Errorf("failed to marshal config: %v", err)
+		return fmt.Errorf("failed to load schema: %v", err)
+	}
+
+	configLoader := gojsonschema.NewGoLoader(typedConfig)
+	result, err := schema.Validate(configLoader)
+	if err != nil {
+		return fmt.Errorf("validation error: %v", err)
+	}
+
+	if !result.Valid() {
+		var errors []string
+		for _, err := range result.Errors() {
+			errors = append(errors, err.String())
+		}
+		return fmt.Errorf("config validation failed: %v", strings.Join(errors, "; "))
+	}
+
+	// Convert to YAML for writing
+	yamlData, err := yaml.Marshal(typedConfig)
+	if err != nil {
+		return fmt.Errorf("failed to marshal config to YAML: %v", err)
 	}
 
 	// Create directory if it doesn't exist
@@ -659,7 +677,7 @@ func writeConfig(config map[string]interface{}) error {
 	}
 
 	// Write config file
-	if err := os.WriteFile(configFilePath, data, 0644); err != nil {
+	if err := os.WriteFile(configFilePath, yamlData, 0644); err != nil {
 		return fmt.Errorf("failed to write config file: %v", err)
 	}
 

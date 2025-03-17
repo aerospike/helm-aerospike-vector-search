@@ -1,0 +1,17 @@
+cluster:
+  cluster-name: "test-cluster"
+feature-key-file: "/etc/aerospike/features.conf"
+aerospike:  # Can't have both aerospike and storage
+  seeds:
+    - aerospike-node-1:
+        port: 3000
+storage:  # This conflicts with aerospike section
+  seeds:
+    - aerospike-node-1:
+        port: 3000
+service:
+  ports:
+    "5000": {}
+interconnect:
+  ports:
+    "5001": {} 

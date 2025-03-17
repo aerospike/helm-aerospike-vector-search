@@ -1,0 +1,11 @@
+cluster:
+  cluster-name: "test-cluster"
+feature-key-file: "/etc/aerospike/features.conf"
+aerospike:
+  seeds: []  # Empty seeds list is invalid
+service:
+  ports:
+    "5000": {}
+interconnect:
+  ports:
+    "5001": {} 

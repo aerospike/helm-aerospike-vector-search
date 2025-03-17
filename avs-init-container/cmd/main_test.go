@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"embed"
 	"io"
 	"net/http"
 	"os"
@@ -457,6 +458,9 @@ func Test_setRoles(t *testing.T) {
 	}
 }
 
+//go:embed testdata/configs/valid/*.yaml testdata/configs/invalid/*.yaml
+var testConfigs embed.FS
+
 func Test_writeConfig(t *testing.T) {
 	_, cleanup := setupTestEnv(t)
 	defer cleanup()
@@ -464,239 +468,87 @@ func Test_writeConfig(t *testing.T) {
 	// Override config file path for testing
 	configFilePath = testConfigPath
 
-	tests := []struct {
-		name    string
-		config  map[string]interface{}
-		wantErr bool
-	}{
-		{
-			name: "Minimal configuration",
-			config: map[string]interface{}{
-				"cluster": map[string]interface{}{
-					"cluster-name": "test-cluster",
-				},
-				"feature-key-file": "/etc/aerospike/features.conf",
-				"aerospike": map[string]interface{}{
-					"seeds": []interface{}{
-						map[string]interface{}{
-							"aerospike-node-1": map[string]interface{}{
-								"port": 3000,
-							},
-						},
-					},
-				},
-				"service": map[string]interface{}{
-					"ports": map[string]interface{}{
-						"5000": map[string]interface{}{},
-					},
-				},
-				"interconnect": map[string]interface{}{
-					"ports": map[string]interface{}{
-						"5001": map[string]interface{}{
-							"addresses": []interface{}{"127.0.0.1"},
-						},
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "Maximal configuration",
-			config: map[string]interface{}{
-				"cluster": map[string]interface{}{
-					"cluster-name": "test-cluster",
-					"node-id":      "a1b2c3",
-					"node-roles":   []interface{}{"index", "search"},
-				},
-				"feature-key-file": "/etc/aerospike/features.conf",
-				"aerospike": map[string]interface{}{
-					"seeds": []interface{}{
-						map[string]interface{}{
-							"aerospike-node-1": map[string]interface{}{
-								"port": 3000,
-							},
-						},
-						map[string]interface{}{
-							"aerospike-node-2": map[string]interface{}{
-								"port": 3001,
-							},
-						},
-					},
-					"client-policy": map[string]interface{}{
-						"credentials": map[string]interface{}{
-							"username":      "admin",
-							"password-file": "/etc/aerospike/password.txt",
-						},
-						"tls-id":             "aerospike-tls",
-						"max-conns-per-node": 1000,
-					},
-				},
-				"logging": map[string]interface{}{
-					"timezone": "UTC",
-					"format":   "json",
-					"file":     "/var/log/aerospike-vector-search.log",
-					"levels": map[string]interface{}{
-						"metrics-ticker": "debug",
-					},
-					"max-history":     30,
-					"ticker-interval": 10,
-				},
-				"heartbeat": map[string]interface{}{
-					"seeds": []interface{}{
-						map[string]interface{}{
-							"address": "10.0.0.1",
-							"port":    5001,
-						},
-					},
-				},
-				"interconnect": map[string]interface{}{
-					"client-tls-id": "interconnect-tls",
-					"ports": map[string]interface{}{
-						"5001": map[string]interface{}{
-							"addresses": []interface{}{"127.0.0.1", "10.0.0.1"},
-							"tls-id":    "interconnect-tls",
-						},
-					},
-				},
-				"security": map[string]interface{}{
-					"auth-token": map[string]interface{}{
-						"private-key":          "/etc/aerospike/private.pem",
-						"private-key-password": "secretpassword",
-						"public-key":           "/etc/aerospike/public.pem",
-						"token-expiry":         3600,
-					},
-				},
-				"service": map[string]interface{}{
-					"metadata-namespace": "aerospike-meta",
-					"ports": map[string]interface{}{
-						"5000": map[string]interface{}{
-							"tls-id": "service-tls",
-							"advertised-listeners": map[string]interface{}{
-								"external": []interface{}{
-									map[string]interface{}{
-										"address": "vector-search.example.com",
-										"port":    5443,
-									},
-								},
-							},
-						},
-					},
-				},
-				"tls": map[string]interface{}{
-					"service-tls": map[string]interface{}{
-						"mutual-auth":        true,
-						"allowed-peer-names": []interface{}{"svc.aerospike.com"},
-						"trust-store": map[string]interface{}{
-							"store-type":        "PEM",
-							"certificate-files": "/etc/aerospike/tls/ca.pem",
-						},
-						"key-store": map[string]interface{}{
-							"store-type":              "PEM",
-							"store-file":              "/etc/aerospike/tls/service.key.pem",
-							"store-password-file":     "/etc/aerospike/tls/storepass",
-							"certificate-chain-files": "/etc/aerospike/tls/service.crt.pem",
-						},
-					},
-				},
-				"manage": map[string]interface{}{
-					"ports": map[string]interface{}{
-						"5040": map[string]interface{}{},
-					},
-				},
-				"hnsw": map[string]interface{}{
-					"max-mem-queue-size": 4000,
-					"cleanup": map[string]interface{}{
-						"dropped-index-cleanup-scheduler-delay": 5000,
-						"mark-dropped-index-clean-after":        30000,
-						"deleted-index-retention-time":          50000,
-					},
-					"batch-merge": map[string]interface{}{
-						"parallelism":            200,
-						"executor-initial-delay": 600000,
-					},
-					"healer": map[string]interface{}{
-						"schedule":        "0 */1 * * * ?",
-						"reindex-percent": 0.25,
-					},
-				},
-			},
-			wantErr: false,
-		},
-		{
-			name: "Missing mandatory fields",
-			config: map[string]interface{}{
-				"service": map[string]interface{}{
-					"ports": map[string]interface{}{
-						"5000": map[string]interface{}{},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "Invalid cluster configuration",
-			config: map[string]interface{}{
-				"cluster":          map[string]interface{}{}, // Missing required cluster-name
-				"feature-key-file": "/etc/aerospike/features.conf",
-				"aerospike": map[string]interface{}{
-					"seeds": []interface{}{}, // Empty seeds list
-				},
-				"service": map[string]interface{}{
-					"ports": map[string]interface{}{
-						"5000": map[string]interface{}{},
-					},
-				},
-				"interconnect": map[string]interface{}{
-					"ports": map[string]interface{}{
-						"5001": map[string]interface{}{
-							"addresses": []interface{}{"127.0.0.1"},
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
+	// Test valid configurations
+	validEntries, err := testConfigs.ReadDir("testdata/configs/valid")
+	if err != nil {
+		t.Fatalf("failed to read valid configs: %v", err)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := writeConfig(tt.config)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("writeConfig() error = %v, wantErr %v", err, tt.wantErr)
+	for _, entry := range validEntries {
+		t.Run("valid/"+entry.Name(), func(t *testing.T) {
+			yamlData, err := testConfigs.ReadFile("testdata/configs/valid/" + entry.Name())
+			if err != nil {
+				t.Fatalf("failed to read config file: %v", err)
 			}
 
-			// Verify the config file was written
-			if !tt.wantErr {
-				content, err := os.ReadFile(testConfigPath)
-				if err != nil {
-					t.Errorf("Failed to read config file: %v", err)
-				}
-				if len(content) == 0 {
-					t.Error("Config file is empty")
-				}
+			var config map[string]interface{}
+			var node yaml.Node
+			if err := yaml.Unmarshal(yamlData, &node); err != nil {
+				t.Fatalf("failed to parse config: %v", err)
+			}
+			if err := node.Decode(&config); err != nil {
+				t.Fatalf("failed to decode config: %v", err)
+			}
 
-				// Verify the content matches the expected format
-				var config map[string]interface{}
-				if err := yaml.Unmarshal(content, &config); err != nil {
-					t.Errorf("Failed to parse config file: %v", err)
-				}
+			if err := writeConfig(config); err != nil {
+				t.Errorf("writeConfig() error = %v, expected no error", err)
+				return
+			}
 
-				// Check for mandatory fields
-				if _, ok := config["cluster"]; !ok {
-					t.Error("Missing mandatory field: cluster")
-				}
-				if _, ok := config["feature-key-file"]; !ok {
-					t.Error("Missing mandatory field: feature-key-file")
-				}
-				if _, ok := config["aerospike"]; !ok {
-					t.Error("Missing mandatory field: aerospike")
-				}
-				if _, ok := config["service"]; !ok {
-					t.Error("Missing mandatory field: service")
-				}
-				if _, ok := config["interconnect"]; !ok {
-					t.Error("Missing mandatory field: interconnect")
-				}
+			// Verify the config file was written and is valid YAML
+			content, err := os.ReadFile(testConfigPath)
+			if err != nil {
+				t.Errorf("Failed to read written config: %v", err)
+				return
+			}
+
+			var writtenConfig map[string]interface{}
+			if err := yaml.Unmarshal(content, &writtenConfig); err != nil {
+				t.Errorf("Failed to parse written config: %v", err)
+				return
+			}
+		})
+	}
+
+	// Test invalid configurations
+	invalidEntries, err := testConfigs.ReadDir("testdata/configs/invalid")
+	if err != nil {
+		t.Fatalf("failed to read invalid configs: %v", err)
+	}
+
+	expectedErrors := map[string]string{
+		"missing-cluster-name.yaml":      "cluster-name",
+		"empty-seeds.yaml":               "seeds cannot be empty",
+		"both-storage-types.yaml":        "cannot have both aerospike and storage",
+		"missing-required-sections.yaml": "required",
+		"invalid-port-format.yaml":       "port",
+	}
+
+	for _, entry := range invalidEntries {
+		t.Run("invalid/"+entry.Name(), func(t *testing.T) {
+			yamlData, err := testConfigs.ReadFile("testdata/configs/invalid/" + entry.Name())
+			if err != nil {
+				t.Fatalf("failed to read config file: %v", err)
+			}
+
+			var config map[string]interface{}
+			var node yaml.Node
+			if err := yaml.Unmarshal(yamlData, &node); err != nil {
+				t.Fatalf("failed to parse config: %v", err)
+			}
+			if err := node.Decode(&config); err != nil {
+				t.Fatalf("failed to decode config: %v", err)
+			}
+
+			err = writeConfig(config)
+			if err == nil {
+				t.Error("writeConfig() expected error, got nil")
+				return
+			}
+
+			expectedError := expectedErrors[entry.Name()]
+			if expectedError != "" && !strings.Contains(err.Error(), expectedError) {
+				t.Errorf("writeConfig() error = %v, expected to contain %q", err, expectedError)
 			}
 		})
 	}

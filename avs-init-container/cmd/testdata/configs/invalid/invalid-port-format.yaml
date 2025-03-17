@@ -1,0 +1,13 @@
+cluster:
+  cluster-name: "test-cluster"
+feature-key-file: "/etc/aerospike/features.conf"
+aerospike:
+  seeds:
+    - aerospike-node-1:
+        port: "not-a-number"
+service:
+  ports:
+    "5000": {}
+interconnect:
+  ports:
+    "5001": {}
