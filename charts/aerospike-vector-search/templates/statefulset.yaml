@@ -86,10 +86,8 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
-            {{- if .Values.aerospikeVectorSearchConfig.cluster }}
             - name: AEROSPIKE_VECTOR_SEARCH_NODE_ROLES
-              value: {{ .Values.aerospikeVectorSearchConfig.cluster | toJson | quote }}
-            {{- end }}
+              value: {{ .Values.aerospikeVectorSearchNodeRoles | toJson | toString | quote }}
           volumeMounts:
             - name: aerospike-vector-search
               mountPath: /etc/aerospike-vector-search
