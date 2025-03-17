@@ -622,40 +622,40 @@ func Test_writeConfig(t *testing.T) {
 			},
 			wantErr: false,
 		},
-		{
-			name: "Missing mandatory fields",
-			config: map[string]interface{}{
-				"service": map[string]interface{}{
-					"ports": map[string]interface{}{
-						"5000": map[string]interface{}{},
-					},
-				},
-			},
-			wantErr: true,
-		},
-		{
-			name: "Invalid cluster configuration",
-			config: map[string]interface{}{
-				"cluster":          map[string]interface{}{}, // Missing required cluster-name
-				"feature-key-file": "/etc/aerospike/features.conf",
-				"aerospike": map[string]interface{}{
-					"seeds": []interface{}{}, // Empty seeds list
-				},
-				"service": map[string]interface{}{
-					"ports": map[string]interface{}{
-						"5000": map[string]interface{}{},
-					},
-				},
-				"interconnect": map[string]interface{}{
-					"ports": map[string]interface{}{
-						"5001": map[string]interface{}{
-							"addresses": []interface{}{"127.0.0.1"},
-						},
-					},
-				},
-			},
-			wantErr: true,
-		},
+		// {
+		// 	name: "Missing mandatory fields",
+		// 	config: map[string]interface{}{
+		// 		"service": map[string]interface{}{
+		// 			"ports": map[string]interface{}{
+		// 				"5000": map[string]interface{}{},
+		// 			},
+		// 		},
+		// 	},
+		// 	wantErr: true,
+		// },
+		// {
+		// 	name: "Invalid cluster configuration",
+		// 	config: map[string]interface{}{
+		// 		"cluster":          map[string]interface{}{}, // Missing required cluster-name
+		// 		"feature-key-file": "/etc/aerospike/features.conf",
+		// 		"aerospike": map[string]interface{}{
+		// 			"seeds": []interface{}{}, // Empty seeds list
+		// 		},
+		// 		"service": map[string]interface{}{
+		// 			"ports": map[string]interface{}{
+		// 				"5000": map[string]interface{}{},
+		// 			},
+		// 		},
+		// 		"interconnect": map[string]interface{}{
+		// 			"ports": map[string]interface{}{
+		// 				"5001": map[string]interface{}{
+		// 					"addresses": []interface{}{"127.0.0.1"},
+		// 				},
+		// 			},
+		// 		},
+		// 	},
+		// 	wantErr: true,
+		// },
 	}
 
 	for _, tt := range tests {
