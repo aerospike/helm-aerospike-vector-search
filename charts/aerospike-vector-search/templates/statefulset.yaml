@@ -49,42 +49,51 @@ spec:
                       - {{ include "aerospike-vector-search.fullname" . }}
               topologyKey: kubernetes.io/hostname
       {{- end }}
+      volumes:
+        - name: aerospike-vector-search
+          emptyDir: {}
+        - name: aerospike-secret
+          secret:
+            secretName: aerospike-secret
+            optional: false
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       initContainers:
         - name: config-injector
           image: "{{ .Values.initContainer.image.repository }}:{{ .Values.initContainer.image.tag | default .Chart.Version }}"
-          imagePullPolicy: {{ .Values.initContainer.image.pullPolicy | default "Always" }}
-          volumeMounts:
-            - name: aerospike-vector-search
-              mountPath: /etc/aerospike-vector-search
+          imagePullPolicy: {{ .Values.initContainer.image.pullPolicy |default "IfNotPresent" }}
           env:
-            - name: NETWORK_MODE
-              value: {{ if .Values.multipodPerHost }}{{ quote "nodeport" }}{{ else }}{{ quote "hostnetwork" }}{{ end }}
-            - name: CONTAINER_PORT
-              value:  {{ default "5000" (keys .Values.aerospikeVectorSearchConfig.service.ports | first) | quote }}
+            - name: AEROSPIKE_VECTOR_SEARCH_CONFIG
+              value: {{ .Values.aerospikeVectorSearchConfig | toJson | quote }}
             - name: NODE_NAME
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
-            - name: POD_NAME
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.name
+            - name: SERVICE_NAME
+              value: {{ include "aerospike-vector-search.fullname" . }}
             - name: POD_NAMESPACE
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            - name: SERVICE_NAME
-              value: {{ include "aerospike-vector-search.fullname" . }}
+            - name: NETWORK_MODE
+              value: {{ if not .Values.multiPodPerHost }}"hostnetwork"{{ else }}"nodeport"{{ end }}
+            - name: CONTAINER_PORT
+              value: "5000"
             - name: REPLICAS
               value: {{ .Values.replicaCount | quote }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
             - name: AEROSPIKE_VECTOR_SEARCH_NODE_ROLES
               value: {{ .Values.aerospikeVectorSearchNodeRoles | toJson | toString | quote }}
-            - name: AEROSPIKE_VECTOR_SEARCH_CONFIG
-              value: {{ .Values.aerospikeVectorSearchConfig | toJson | toString | quote }}
-      {{ if .Values.initContainers }}
-      initContainers:
-      {{- toYaml .Values.initContainers | nindent 8 }}
-      {{- end }}
+          volumeMounts:
+            - name: aerospike-vector-search
+              mountPath: /etc/aerospike-vector-search
+        {{- with .Values.initContainers }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           securityContext:
@@ -99,8 +108,8 @@ spec:
           envFrom:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- if and .Values.aerospikeVectorSearchConfig.service (not (empty .Values.aerospikeVectorSearchConfig.service.ports)) }}
           ports:
+            {{- if and .Values.aerospikeVectorSearchConfig.service (not (empty .Values.aerospikeVectorSearchConfig.service.ports)) }}
             {{- $svcPortCounter := 0 }}
             {{- range $port, $config := .Values.aerospikeVectorSearchConfig.service.ports }}
             - name: {{ printf "svc-%s" (default (printf "%d" $svcPortCounter) $config.name) }}
@@ -108,9 +117,8 @@ spec:
               containerPort: {{ $port }}
               protocol: {{ default "TCP" $config.protocol }}
             {{- end }}
-          {{- end }}
-          {{- if and .Values.aerospikeVectorSearchConfig.manage (not (empty .Values.aerospikeVectorSearchConfig.manage.ports)) }}
-          ports:
+            {{- end }}
+            {{- if and .Values.aerospikeVectorSearchConfig.manage (not (empty .Values.aerospikeVectorSearchConfig.manage.ports)) }}
             {{- $managePortCounter := 0 }}
             {{- range $port, $config := .Values.aerospikeVectorSearchConfig.manage.ports }}
             - name: {{ printf "manage-%s" (default (printf "%d" $managePortCounter) $config.name) }}
@@ -118,9 +126,8 @@ spec:
               containerPort: {{ $port }}
               protocol: {{ default "TCP" $config.protocol }}
             {{- end }}
-          {{- end }}
-          {{- if and .Values.aerospikeVectorSearchConfig.interconnect (not (empty .Values.aerospikeVectorSearchConfig.interconnect.ports)) }}
-          ports:
+            {{- end }}
+            {{- if and .Values.aerospikeVectorSearchConfig.interconnect (not (empty .Values.aerospikeVectorSearchConfig.interconnect.ports)) }}
             {{- $interconnectPortCounter := 0 }}
             {{- range $port, $config := .Values.aerospikeVectorSearchConfig.interconnect.ports }}
             - name: {{ printf "interc-%s" (default (printf "%d" $interconnectPortCounter) $config.name) }}
@@ -128,7 +135,11 @@ spec:
               containerPort: {{ $port }}
               protocol: {{ default "TCP" $config.protocol }}
             {{- end }}
-          {{- end }}
+            {{- end }}
+          command:
+            - /bin/sh
+            - -c
+            - "export JAVA_OPTS=$(cat /etc/aerospike-vector-search/jvm.opts) && exec /usr/bin/as-tini-static -r SIGUSR1 -t SIGTERM -e 143 -- /opt/aerospike-vector-search/bin/aerospike-vector-search -f /etc/aerospike-vector-search/aerospike-vector-search.yml"
           volumeMounts:
             - name: aerospike-vector-search
               mountPath: /etc/aerospike-vector-search
@@ -163,16 +174,6 @@ spec:
             timeoutSeconds: 2
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
-      volumes:
-        - name: aerospike-vector-search
-          emptyDir: {}
-        - name: aerospike-secret
-          secret:
-            secretName: aerospike-secret
-            optional: false
-      {{- with .Values.extraVolumes }}
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
