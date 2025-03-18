@@ -22,9 +22,10 @@ import (
 )
 
 const (
-	AVS_NODE_LABEL_KEY   = "aerospike.io/role-label"
-	NODE_ROLES_KEY       = "node-roles"
-	AVS_CONFIG_FILE_PATH = "/etc/aerospike-vector-search/aerospike-vector-search.yml"
+	K8S_HOSTNAME_ANNOTATION = "kubernetes.io/hostname"
+	AVS_NODE_LABEL_KEY      = "aerospike.io/role-label"
+	NODE_ROLES_KEY          = "node-roles"
+	AVS_CONFIG_FILE_PATH    = "/etc/aerospike-vector-search/aerospike-vector-search.yml"
 )
 
 // our simple tests potentially overrride these variables.
@@ -178,24 +179,31 @@ func getEndpointByMode() (string, int32, error) {
 		return "", 0, err
 	}
 
-	// Determine node IP: prefer external, then internal.
-	var nodeIP string
-	for _, addr := range node.Status.Addresses {
-		if addr.Type == v1.NodeExternalIP {
-			nodeIP = addr.Address
-			break
-		}
-	}
-	if nodeIP == "" {
+	// Determine node Address prefer: hostname if no hostname: prefer external ip, then internal ip.
+	var nodeAddress string
+	if hostname, ok := node.Labels[K8S_HOSTNAME_ANNOTATION]; ok {
+		log.Printf("Found node hostname label: %s=%s\n", AVS_NODE_LABEL_KEY, hostname)
+		nodeAddress = hostname
+	} else {
+		log.Printf("Not Found node hostname label: %s=%s\n", AVS_NODE_LABEL_KEY, hostname)
 		for _, addr := range node.Status.Addresses {
-			if addr.Type == v1.NodeInternalIP {
-				nodeIP = addr.Address
+			if addr.Type == v1.NodeExternalIP {
+				nodeAddress = addr.Address
 				break
 			}
 		}
+		if nodeAddress == "" {
+			for _, addr := range node.Status.Addresses {
+				if addr.Type == v1.NodeInternalIP {
+					nodeAddress = addr.Address
+					break
+				}
+			}
+		}
 	}
-	if nodeIP == "" {
-		return "", 0, fmt.Errorf("no valid node IP found")
+
+	if nodeAddress == "" {
+		return "", 0, fmt.Errorf("no valid node address found")
 	}
 
 	switch networkMode {
@@ -210,7 +218,7 @@ func getEndpointByMode() (string, int32, error) {
 				}
 			}
 			if nodePort != 0 {
-				return nodeIP, nodePort, nil
+				return nodeAddress, nodePort, nil
 			}
 			log.Println("NodePort not found; defaulting to internal networking (no advertised listener update)")
 			return "", 0, nil
@@ -232,7 +240,7 @@ func getEndpointByMode() (string, int32, error) {
 		}
 		log.Println("CONTAINER_PORT:", containerPortStr, "for hostnetwork mode")
 
-		return nodeIP, int32(containerPort), nil
+		return nodeAddress, int32(containerPort), nil
 
 	default:
 		return "", 0, fmt.Errorf("unsupported NETWORK_MODE: %s", networkMode)
@@ -315,18 +323,18 @@ func setAdvertisedListeners(aerospikeVectorSearchConfig map[string]interface{}) 
 	log.Println("Starting setAdvertisedListeners()")
 
 	// Use the new function to get the endpoint based on network mode.
-	ip, port, err := getEndpointByMode()
+	address, port, err := getEndpointByMode()
 	if err != nil {
 		log.Println("Error getting endpoint:", err)
 		return err
 	}
 
-	if ip == "" && port == 0 {
+	if address == "" && port == 0 {
 		log.Println("No endpoint available; nothing to update")
 		return nil
 	}
 
-	log.Printf("Setting advertised listeners to IP: %s, Port: %d\n", ip, port)
+	log.Printf("Setting advertised listeners to Address: %s, Port: %d\n", address, port)
 
 	serviceConfig, ok := aerospikeVectorSearchConfig["service"].(map[string]interface{})
 	if !ok {
@@ -352,7 +360,7 @@ func setAdvertisedListeners(aerospikeVectorSearchConfig map[string]interface{}) 
 		portMap["advertised-listeners"] = map[string][]map[string]interface{}{
 			"default": {
 				{
-					"address": ip,
+					"address": address,
 					"port":    port,
 				},
 			},
