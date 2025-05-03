@@ -37,6 +37,7 @@ helm repo add aerospike-io https://artifact.aerospike.io/artifactory/api/helm/ae
 | `aerospikeVectorSearchConfig`              | AVS cluster configuration deployed to `/etc/aerospike-vector-search/aerospike-vector-search.yml`. Use this section to define indexing parameters, vector dimensions, port settings, etc.                                                                                                             | _See values.yaml_                                                                                                                                                                                                                               |
 | `initContainers`                           | List of additional init containers added to each AVS pod for custom behavior.                                                                                                                                                                                                                             | `[]`                                                                                                                                                                                                                                            |
 | `initContainer`                            | Configures the primary init container, which adjusts AVS configuration and node scheduling. Includes image details (repository, tag, pull policy) and can be extended with options such as host networking.                                                                                        | _See values.yaml_ (repository: `"artifact.aerospike.io/container/avs-init-container"`, tag: `""`, pullPolicy: `"IfNotPresent"`)                                                                                                                  |
+| `initMemory`                               | JVM memory configuration for the AVS init container. Controls heap size, direct buffer allocation, metaspace, and system reserve. See [Memory Configuration](#memory-configuration) for details.                                                                                                | _See values.yaml_ (heapPercent: 65, heapFloorMiB: 1024, heapCeilMiB: 262144, directPercent: 10, metaspaceMiB: 256, systemReserveMiB: 2048)                                                                                                      |
 | `aerospikeVectorSearchNodeRoles`           | Defines a mapping from node pool labels to AVS node roles. For example, nodes labeled as `query-nodes` will be scheduled with the role `query`, and those in the `indexer-nodes` pool with `index-update`. This enables the init container to tailor configuration and pod scheduling.             | [see default](#node-roles-config)                                                                                       |
 | `multiPodPerHost`                          | Specifies whether multiple AVS pods can be scheduled on the same host.                                                                                                                                                                                                                                   | `true`                                                                                                                                                                                                                                          |
 | `serviceAccount`                           | Service Account details including creation flag, name, and annotations. See the [values.yaml](values.yaml) for further details.                                                                                                                                                                          | _See values.yaml_                                                                                                                                                                                                                               |
@@ -112,6 +113,45 @@ Here `replicaCount` is the count of AVS pods that are deployed.
 The AVS configuration is provided as yaml under the key `aerospikeVectorSearchConfig`.
 
 See [Aerospike Vector Search](https://aerospike.com/docs/vector/operate/configuration) configuration documentation for more details on AVS configuration.
+
+### Memory Configuration
+
+The `initMemory` section allows fine-grained control over JVM memory allocation for the AVS init container. This is particularly useful for optimizing performance in different deployment scenarios.
+
+```yaml
+initMemory:
+  # Percentage of available memory to allocate to the JVM heap (1-100%)
+  heapPercent: 65
+  
+  # Minimum heap size in MiB (1 GiB = 1024 MiB)
+  heapFloorMiB: 1024
+  
+  # Maximum heap size in MiB (256 GiB = 262144 MiB)
+  heapCeilMiB: 262144
+  
+  # Percentage of available memory to allocate to direct buffers (0-100%)
+  directPercent: 10
+  
+  # Maximum metaspace size in MiB
+  metaspaceMiB: 256
+  
+  # Amount of memory to reserve for system (OS, kubelet, etc) in MiB
+  systemReserveMiB: 2048
+```
+
+The memory configuration works as follows:
+1. The available memory is calculated as: `Total Node Memory - systemReserveMiB`
+2. The JVM heap size is calculated as: `min(heapCeilMiB, max(heapFloorMiB, availableMemory * heapPercent / 100))`
+3. Direct buffer memory is calculated as: `availableMemory * directPercent / 100`
+4. Metaspace is fixed at the specified size
+
+This hybrid approach ensures:
+- A minimum guaranteed heap size (heapFloorMiB)
+- A maximum cap on heap size (heapCeilMiB)
+- Proportional scaling based on available memory (heapPercent)
+- Reserved memory for system operations (systemReserveMiB)
+- Controlled direct buffer allocation (directPercent)
+- Fixed metaspace allocation (metaspaceMiB)
 
 ### Node Roles Config
 Default config is a map of roles. Nodes matching the key will be assigned the corresponding list of roles.

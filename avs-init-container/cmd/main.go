@@ -25,6 +25,14 @@ const (
 	AVS_NODE_LABEL_KEY   = "aerospike.io/role-label"
 	NODE_ROLES_KEY       = "node-roles"
 	AVS_CONFIG_FILE_PATH = "/etc/aerospike-vector-search/aerospike-vector-search.yml"
+	DEFAULT_HEAP_PERCENT = 65 // Default to 65% if not specified
+
+	// Memory management constants
+	DEFAULT_HEAP_FLOOR_MIB     = 1024   // 1 GiB minimum heap
+	DEFAULT_HEAP_CEIL_MIB      = 262144 // 256 GiB maximum heap
+	DEFAULT_DIRECT_PERCENT     = 10     // 10% for direct memory
+	DEFAULT_METASPACE_MIB      = 256    // 256 MiB for metaspace
+	DEFAULT_SYSTEM_RESERVE_MIB = 2048   // 2 GiB system reserve
 )
 
 // our simple tests potentially overrride these variables.
@@ -36,6 +44,12 @@ var (
 	jvmOptsFilePath = "/etc/aerospike-vector-search/jvm.opts"
 	getConfig       = rest.InClusterConfig
 )
+
+// SysinfoFunc is a type alias for the syscall.Sysinfo function
+type SysinfoFunc func(*syscall.Sysinfo_t) error
+
+// Sysinfo is a variable that can be mocked in tests
+var Sysinfo SysinfoFunc = syscall.Sysinfo
 
 func setCgroupPaths(v2path, v1path string) {
 	cgroupV2File = v2path
@@ -71,10 +85,53 @@ func getJvmOptions() (string, error) {
 	return jvmOptions, nil
 }
 
-func calculateJvmOptions() (string, error) {
-	var memLimitBytes uint64
+func getEnvInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if i, err := strconv.Atoi(v); err == nil {
+			return i
+		}
+	}
+	return def
+}
 
-	// Try cgroup v2 first
+func clamp(x, lo, hi uint64) uint64 {
+	if x < lo {
+		return lo
+	}
+	if x > hi {
+		return hi
+	}
+	return x
+}
+
+/*
+calculateJvmOptions determines optimal JVM memory settings for the container.
+
+Memory sizing logic:
+ 1. Detect the memory limit using (in order):
+    - cgroup v2 (if available)
+    - cgroup v1 (if v2 is unavailable)
+    - system memory (if no cgroup limit is set)
+ 2. Subtract a system reserve (for OS, kubelet, etc).
+ 3. Calculate the JVM heap as a percentage of the remaining memory,
+    but clamp it between a minimum (floor) and maximum (ceiling).
+ 4. Set direct memory and metaspace limits as a percentage or fixed value.
+ 5. Return JVM options string with all calculated values.
+
+All thresholds and percentages are configurable via environment variables,
+which are typically set via Helm values in production deployments.
+*/
+func calculateJvmOptions() (string, error) {
+	// Get memory configuration from environment or use defaults
+	heapPercent := getEnvInt("AEROSPIKE_VECTOR_SEARCH_HEAP_PERCENT", DEFAULT_HEAP_PERCENT)
+	heapFloorMiB := getEnvInt("AEROSPIKE_VECTOR_SEARCH_HEAP_FLOOR_MIB", DEFAULT_HEAP_FLOOR_MIB)
+	heapCeilMiB := getEnvInt("AEROSPIKE_VECTOR_SEARCH_HEAP_CEIL_MIB", DEFAULT_HEAP_CEIL_MIB)
+	directPercent := getEnvInt("AEROSPIKE_VECTOR_SEARCH_DIRECT_PERCENT", DEFAULT_DIRECT_PERCENT)
+	metaspaceMiB := getEnvInt("AEROSPIKE_VECTOR_SEARCH_METASPACE_MIB", DEFAULT_METASPACE_MIB)
+	systemReserveMiB := getEnvInt("AEROSPIKE_VECTOR_SEARCH_SYSTEM_RESERVE_MIB", DEFAULT_SYSTEM_RESERVE_MIB)
+
+	// Detect memory limit
+	var memLimitBytes uint64
 	if _, err := os.Stat(cgroupV2File); err == nil {
 		memLimitBytes, err = readCgroupMemoryLimit(cgroupV2File)
 		if err != nil {
@@ -82,7 +139,6 @@ func calculateJvmOptions() (string, error) {
 		}
 	}
 
-	// Fall back to cgroup v1 if v2 failed or doesn't exist
 	if memLimitBytes == 0 {
 		if _, err := os.Stat(cgroupV1File); err == nil {
 			memLimitBytes, err = readCgroupMemoryLimit(cgroupV1File)
@@ -92,7 +148,6 @@ func calculateJvmOptions() (string, error) {
 		}
 	}
 
-	// If both methods failed or returned 0, use system memory
 	if memLimitBytes == 0 {
 		var si syscall.Sysinfo_t
 		if err := syscall.Sysinfo(&si); err != nil {
@@ -102,9 +157,7 @@ func calculateJvmOptions() (string, error) {
 		log.Printf("Using system total memory: %d bytes", memLimitBytes)
 	}
 
-	// Some platforms show a very large value if there's "no real limit"
-	// For example, 9223372036854771712 (~2^63-1).
-	// In this case, we should use the actual system memory
+	// Handle "no real limit" case
 	if memLimitBytes > 9000000000000000000 {
 		var si syscall.Sysinfo_t
 		if err := syscall.Sysinfo(&si); err != nil {
@@ -114,21 +167,35 @@ func calculateJvmOptions() (string, error) {
 		log.Printf("No real memory limit set, using system total memory: %d bytes", memLimitBytes)
 	}
 
-	// Calculate Xmx as ~80% of the container limit
-	xmxBytes := memLimitBytes * 80 / 100
-	xmxMB := xmxBytes / 1024 / 1024
+	// Subtract system reserve
+	reserveBytes := uint64(systemReserveMiB) * 1024 * 1024
+	if memLimitBytes > reserveBytes {
+		memLimitBytes -= reserveBytes
+	}
 
-	// Create the JVM options string with optimized settings
+	// Calculate memory sizes
+	heapBytes := clamp(
+		memLimitBytes*uint64(heapPercent)/100,
+		uint64(heapFloorMiB)*1024*1024,
+		uint64(heapCeilMiB)*1024*1024,
+	)
+	directBytes := memLimitBytes * uint64(directPercent) / 100
+	metaBytes := uint64(metaspaceMiB) * 1024 * 1024
+
+	// Create JVM options
 	jvmOptions := []string{
-		fmt.Sprintf("-Xmx%dm", xmxMB),
-		// No longer try to set these other JVM options. We are trusting the container defaults.
-		// "-XX:+UseG1GC",
-		// "-XX:+ParallelRefProcEnabled",
-		// "-XX:+UseStringDeduplication",
+		fmt.Sprintf("-Xmx%dm", heapBytes/1024/1024),
+		fmt.Sprintf("-XX:MaxDirectMemorySize=%dm", directBytes/1024/1024),
+		fmt.Sprintf("-XX:MaxMetaspaceSize=%dm", metaBytes/1024/1024),
+		"-XX:+ExitOnOutOfMemoryError",
+		"-XX:+UseZGC",
+		"-XX:+ZGenerational",
+		"-Xss256k",
 	}
 
 	jvmOptionsStr := strings.Join(jvmOptions, " ")
-	log.Printf("Calculated JVM options: %s", jvmOptionsStr)
+	log.Printf("Calculated JVM options: %s (heap: %d%% of %d bytes, clamped between %d MiB and %d MiB)",
+		jvmOptionsStr, heapPercent, memLimitBytes, heapFloorMiB, heapCeilMiB)
 
 	return jvmOptionsStr, nil
 }
@@ -680,6 +747,72 @@ func writeJvmOptions(opts string) error {
 	}
 
 	return nil
+}
+
+// CalculateMemoryConfig calculates JVM heap and direct memory sizes based on system memory and configuration
+func CalculateMemoryConfig() (heapMiB int, directMiB int, err error) {
+	// Get system memory info
+	var si syscall.Sysinfo_t
+	if err := Sysinfo(&si); err != nil {
+		return 0, 0, fmt.Errorf("failed to get system memory info: %v", err)
+	}
+
+	// Get memory configuration from environment variables
+	heapPercent, err := strconv.Atoi(os.Getenv("AEROSPIKE_VECTOR_SEARCH_HEAP_PERCENT"))
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid heap percent: %v", err)
+	}
+	if heapPercent < 1 || heapPercent > 100 {
+		return 0, 0, fmt.Errorf("heap percent must be between 1 and 100")
+	}
+
+	heapFloorMiB, err := strconv.Atoi(os.Getenv("AEROSPIKE_VECTOR_SEARCH_HEAP_FLOOR_MIB"))
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid heap floor: %v", err)
+	}
+	if heapFloorMiB < 1 {
+		return 0, 0, fmt.Errorf("heap floor must be at least 1 MiB")
+	}
+
+	heapCeilMiB, err := strconv.Atoi(os.Getenv("AEROSPIKE_VECTOR_SEARCH_HEAP_CEIL_MIB"))
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid heap ceiling: %v", err)
+	}
+	if heapCeilMiB < 1 {
+		return 0, 0, fmt.Errorf("heap ceiling must be at least 1 MiB")
+	}
+
+	directPercent, err := strconv.Atoi(os.Getenv("AEROSPIKE_VECTOR_SEARCH_DIRECT_PERCENT"))
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid direct percent: %v", err)
+	}
+	if directPercent < 0 || directPercent > 100 {
+		return 0, 0, fmt.Errorf("direct percent must be between 0 and 100")
+	}
+
+	systemReserveMiB, err := strconv.Atoi(os.Getenv("AEROSPIKE_VECTOR_SEARCH_SYSTEM_RESERVE_MIB"))
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid system reserve: %v", err)
+	}
+	if systemReserveMiB < 0 {
+		return 0, 0, fmt.Errorf("system reserve must be non-negative")
+	}
+
+	// Calculate available memory in MiB
+	totalMiB := int(si.Totalram / (1024 * 1024))
+	availableMiB := totalMiB - systemReserveMiB
+	if availableMiB < 0 {
+		availableMiB = 0
+	}
+
+	// Calculate heap size
+	calculatedHeapMiB := (availableMiB * heapPercent) / 100
+	heapMiB = int(clamp(uint64(calculatedHeapMiB), uint64(heapFloorMiB), uint64(heapCeilMiB)))
+
+	// Calculate direct memory size
+	directMiB = (availableMiB * directPercent) / 100
+
+	return heapMiB, directMiB, nil
 }
 
 func run() int {
