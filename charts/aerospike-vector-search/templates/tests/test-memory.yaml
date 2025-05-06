@@ -9,6 +9,19 @@ spec:
   containers:
     - name: memory-test
       image: busybox
+      env:
+        - name: AEROSPIKE_VECTOR_SEARCH_HEAP_PERCENT
+          value: "{{ .Values.memory.heapPercent | default 65 | quote }}"
+        - name: AEROSPIKE_VECTOR_SEARCH_HEAP_FLOOR_MIB
+          value: "{{ .Values.memory.heapFloorMiB | default 1024 | quote }}"
+        - name: AEROSPIKE_VECTOR_SEARCH_HEAP_CEIL_MIB
+          value: "{{ .Values.memory.heapCeilMiB | default 262144 | quote }}"
+        - name: AEROSPIKE_VECTOR_SEARCH_DIRECT_PERCENT
+          value: "{{ .Values.memory.directPercent | default 10 | quote }}"
+        - name: AEROSPIKE_VECTOR_SEARCH_METASPACE_MIB
+          value: "{{ .Values.memory.metaspaceMiB | default 256 | quote }}"
+        - name: AEROSPIKE_VECTOR_SEARCH_SYSTEM_RESERVE_MIB
+          value: "{{ .Values.memory.systemReserveMiB | default 2048 | quote }}"
       command:
         - sh
         - -c

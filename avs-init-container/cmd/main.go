@@ -45,17 +45,6 @@ var (
 	getConfig       = rest.InClusterConfig
 )
 
-// SysinfoFunc is a type alias for the syscall.Sysinfo function
-type SysinfoFunc func(*syscall.Sysinfo_t) error
-
-// Sysinfo is a variable that can be mocked in tests
-var Sysinfo SysinfoFunc = syscall.Sysinfo
-
-func setCgroupPaths(v2path, v1path string) {
-	cgroupV2File = v2path
-	cgroupV1File = v1path
-}
-
 type NodeInfoSingleton struct {
 	node    *v1.Node
 	service *v1.Service
@@ -150,7 +139,7 @@ func calculateJvmOptions() (string, error) {
 
 	if memLimitBytes == 0 {
 		var si syscall.Sysinfo_t
-		if err := syscall.Sysinfo(&si); err != nil {
+		if err := Sysinfo(&si); err != nil {
 			return "", fmt.Errorf("failed to get system memory info: %v", err)
 		}
 		memLimitBytes = uint64(si.Totalram)
@@ -160,7 +149,7 @@ func calculateJvmOptions() (string, error) {
 	// Handle "no real limit" case
 	if memLimitBytes > 9000000000000000000 {
 		var si syscall.Sysinfo_t
-		if err := syscall.Sysinfo(&si); err != nil {
+		if err := Sysinfo(&si); err != nil {
 			return "", fmt.Errorf("failed to get system memory info: %v", err)
 		}
 		memLimitBytes = uint64(si.Totalram)
@@ -210,7 +199,7 @@ func readCgroupMemoryLimit(path string) (uint64, error) {
 	if strings.TrimSpace(string(data)) == "max" {
 		// If "max" is set, we'll use the system memory instead
 		var si syscall.Sysinfo_t
-		if err := syscall.Sysinfo(&si); err != nil {
+		if err := Sysinfo(&si); err != nil {
 			return 0, fmt.Errorf("failed to get system memory info: %v", err)
 		}
 		return uint64(si.Totalram), nil
@@ -751,7 +740,6 @@ func writeJvmOptions(opts string) error {
 
 // CalculateMemoryConfig calculates JVM heap and direct memory sizes based on system memory and configuration
 func CalculateMemoryConfig() (heapMiB int, directMiB int, err error) {
-	// Get system memory info
 	var si syscall.Sysinfo_t
 	if err := Sysinfo(&si); err != nil {
 		return 0, 0, fmt.Errorf("failed to get system memory info: %v", err)

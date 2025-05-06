@@ -1175,7 +1175,7 @@ func TestReadCgroupMemoryLimit(t *testing.T) {
 					t.Error("Expected non-zero system memory value")
 				}
 				var si syscall.Sysinfo_t
-				if err := syscall.Sysinfo(&si); err != nil {
+				if err := Sysinfo(&si); err != nil {
 					t.Fatalf("Failed to get system memory info: %v", err)
 				}
 				// For cgroup v1 max value, we expect the actual value to be returned
@@ -1287,32 +1287,6 @@ func TestWriteJvmOptions(t *testing.T) {
 	}
 }
 
-// MockSysinfo is a mock implementation of syscall.Sysinfo
-type MockSysinfo struct {
-	Totalram uint64
-}
-
-var mockSysinfo = &MockSysinfo{}
-
-func (m *MockSysinfo) Get() (*syscall.Sysinfo_t, error) {
-	si := &syscall.Sysinfo_t{
-		Totalram: m.Totalram,
-	}
-	return si, nil
-}
-
-// Mock the syscall.Sysinfo function for testing
-func init() {
-	syscall.Sysinfo = func(info *syscall.Sysinfo_t) error {
-		si, err := mockSysinfo.Get()
-		if err != nil {
-			return err
-		}
-		*info = *si
-		return nil
-	}
-}
-
 func TestCalculateMemoryConfig(t *testing.T) {
 	// Save original Sysinfo function
 	originalSysinfo := Sysinfo
@@ -1344,8 +1318,8 @@ func TestCalculateMemoryConfig(t *testing.T) {
 			directPercent:    10,
 			metaspaceMiB:     256,
 			systemReserveMiB: 2048,
-			wantHeapMiB:      5325, // (8GB - 2GB) * 65% = 6GB * 65% = 3.9GB ≈ 3994MiB
-			wantDirectMiB:    819,  // (8GB - 2GB) * 10% = 6GB * 10% = 614MiB
+			wantHeapMiB:      3993,
+			wantDirectMiB:    614,
 			wantErr:          false,
 		},
 		{
@@ -1371,7 +1345,7 @@ func TestCalculateMemoryConfig(t *testing.T) {
 			metaspaceMiB:     256,
 			systemReserveMiB: 2048,
 			wantHeapMiB:      262144, // Ceiling of 256GB
-			wantDirectMiB:    524288, // (512GB - 2GB) * 10% = 510GB * 10% = 51GB
+			wantDirectMiB:    52224,  // (522,240 * 10%) = 52,224 MiB
 			wantErr:          false,
 		},
 		{
