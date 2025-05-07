@@ -2,8 +2,7 @@ fullnameOverride: avs-app
 aerospikeVectorSearchConfig:
   cluster:
     cluster-name: "avs-db-1"
-  feature-key-file: "/etc/aerospike-vector-search/secrets/features.conf" # Sharing secret with aerospike.
-
+  feature-key-file: "/etc/aerospike-vector-search/secrets/features.conf"  # Sharing secret with aerospike.
   service:
     ports:
       5000:
@@ -28,16 +27,14 @@ aerospikeVectorSearchConfig:
       metrics-ticker: info
       root: info
     ticker-interval: 10
-
 # Complete memory settings configuration
 memory:
   heapPercent: 70
   heapFloorMiB: 1024
-  heapCeilMiB: 131072 # 128GB
+  heapCeilMiB: 131072  # 128GB
   directPercent: 15
   metaspaceMiB: 512
   systemReserveMiB: 2048
-
 service:
   enabled: true
   type: NodePort
