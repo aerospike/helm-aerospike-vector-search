@@ -88,6 +88,18 @@ spec:
                   fieldPath: metadata.name
             - name: AEROSPIKE_VECTOR_SEARCH_NODE_ROLES
               value: {{ .Values.aerospikeVectorSearchNodeRoles | toJson | toString | quote }}
+            - name: AEROSPIKE_VECTOR_SEARCH_HEAP_PERCENT
+              value: "{{ .Values.initMemory.heapPercent  }}"
+            - name: AEROSPIKE_VECTOR_SEARCH_HEAP_FLOOR_MIB
+              value: "{{ .Values.initMemory.heapFloorMiB  }}"
+            - name: AEROSPIKE_VECTOR_SEARCH_HEAP_CEIL_MIB
+              value: "{{ .Values.initMemory.heapCeilMiB  }}"
+            - name: AEROSPIKE_VECTOR_SEARCH_DIRECT_PERCENT
+              value: "{{ .Values.initMemory.directPercent  }}"
+            - name: AEROSPIKE_VECTOR_SEARCH_METASPACE_MIB
+              value: "{{ .Values.initMemory.metaspaceMiB  }}"
+            - name: AEROSPIKE_VECTOR_SEARCH_SYSTEM_RESERVE_MIB
+              value: "{{ .Values.initMemory.systemReserveMiB  }}"
           volumeMounts:
             - name: aerospike-vector-search
               mountPath: /etc/aerospike-vector-search

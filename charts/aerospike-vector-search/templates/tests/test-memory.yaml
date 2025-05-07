@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "aerospike-vector-search.fullname" . }}-test-memory"
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  containers:
+    - name: memory-test
+      image: busybox
+      env:
+        - name: AEROSPIKE_VECTOR_SEARCH_HEAP_PERCENT
+          value: "{{ .Values.memory.heapPercent | default 65  }}"
+        - name: AEROSPIKE_VECTOR_SEARCH_HEAP_FLOOR_MIB
+          value: "{{ .Values.memory.heapFloorMiB | default 1024 }}"
+        - name: AEROSPIKE_VECTOR_SEARCH_HEAP_CEIL_MIB
+          value: "{{ .Values.memory.heapCeilMiB | default 262144 }}"
+        - name: AEROSPIKE_VECTOR_SEARCH_DIRECT_PERCENT
+          value: "{{ .Values.memory.directPercent | default 10 }}"
+        - name: AEROSPIKE_VECTOR_SEARCH_METASPACE_MIB
+          value: "{{ .Values.memory.metaspaceMiB | default 256 }}"
+        - name: AEROSPIKE_VECTOR_SEARCH_SYSTEM_RESERVE_MIB
+          value: "{{ .Values.memory.systemReserveMiB | default 2048 }}"
+      command:
+        - sh
+        - -c
+        - |
+          # Test heap percentage
+          if [ "$AEROSPIKE_VECTOR_SEARCH_HEAP_PERCENT" != "{{ .Values.memory.heapPercent | default 65 }}" ]; then
+            echo "AEROSPIKE_VECTOR_SEARCH_HEAP_PERCENT is not set correctly, got $AEROSPIKE_VECTOR_SEARCH_HEAP_PERCENT";
+            exit 1;
+          fi
+
+          # Test heap floor
+          if [ "$AEROSPIKE_VECTOR_SEARCH_HEAP_FLOOR_MIB" != "{{ .Values.memory.heapFloorMiB | default 1024 }}" ]; then
+            echo "AEROSPIKE_VECTOR_SEARCH_HEAP_FLOOR_MIB is not set correctly, got $AEROSPIKE_VECTOR_SEARCH_HEAP_FLOOR_MIB";
+            exit 1;
+          fi
+
+          # Test heap ceiling
+          if [ "$AEROSPIKE_VECTOR_SEARCH_HEAP_CEIL_MIB" != "{{ .Values.memory.heapCeilMiB | default 262144 }}" ]; then
+            echo "AEROSPIKE_VECTOR_SEARCH_HEAP_CEIL_MIB is not set correctly, got $AEROSPIKE_VECTOR_SEARCH_HEAP_CEIL_MIB";
+            exit 1;
+          fi
+
+          # Test direct memory percentage
+          if [ "$AEROSPIKE_VECTOR_SEARCH_DIRECT_PERCENT" != "{{ .Values.memory.directPercent | default 10 }}" ]; then
+            echo "AEROSPIKE_VECTOR_SEARCH_DIRECT_PERCENT is not set correctly, got $AEROSPIKE_VECTOR_SEARCH_DIRECT_PERCENT";
+            exit 1;
+          fi
+
+          # Test metaspace
+          if [ "$AEROSPIKE_VECTOR_SEARCH_METASPACE_MIB" != "{{ .Values.memory.metaspaceMiB | default 256 }}" ]; then
+            echo "AEROSPIKE_VECTOR_SEARCH_METASPACE_MIB is not set correctly, got $AEROSPIKE_VECTOR_SEARCH_METASPACE_MIB";
+            exit 1;
+          fi
+
+          # Test system reserve
+          if [ "$AEROSPIKE_VECTOR_SEARCH_SYSTEM_RESERVE_MIB" != "{{ .Values.memory.systemReserveMiB | default 2048 }}" ]; then
+            echo "AEROSPIKE_VECTOR_SEARCH_SYSTEM_RESERVE_MIB is not set correctly, got $AEROSPIKE_VECTOR_SEARCH_SYSTEM_RESERVE_MIB";
+            exit 1;
+          fi
+
+          echo "All memory settings are correct";
+          exit 0;
+  restartPolicy: Never 

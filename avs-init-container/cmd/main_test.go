@@ -1175,7 +1175,7 @@ func TestReadCgroupMemoryLimit(t *testing.T) {
 					t.Error("Expected non-zero system memory value")
 				}
 				var si syscall.Sysinfo_t
-				if err := syscall.Sysinfo(&si); err != nil {
+				if err := Sysinfo(&si); err != nil {
 					t.Fatalf("Failed to get system memory info: %v", err)
 				}
 				// For cgroup v1 max value, we expect the actual value to be returned
@@ -1282,6 +1282,132 @@ func TestWriteJvmOptions(t *testing.T) {
 			}
 			if info.Mode().Perm() != 0644 {
 				t.Errorf("Expected file permissions 0644, got %v", info.Mode().Perm())
+			}
+		})
+	}
+}
+
+func TestCalculateMemoryConfig(t *testing.T) {
+	// Save original Sysinfo function
+	originalSysinfo := Sysinfo
+
+	// Restore original Sysinfo function after test
+	defer func() {
+		Sysinfo = originalSysinfo
+	}()
+
+	tests := []struct {
+		name             string
+		totalMemory      uint64
+		heapPercent      int
+		heapFloorMiB     int
+		heapCeilMiB      int
+		directPercent    int
+		metaspaceMiB     int
+		systemReserveMiB int
+		wantHeapMiB      int
+		wantDirectMiB    int
+		wantErr          bool
+	}{
+		{
+			name:             "Normal case with 8GB total memory",
+			totalMemory:      8 * 1024 * 1024 * 1024, // 8GB
+			heapPercent:      65,
+			heapFloorMiB:     1024,
+			heapCeilMiB:      262144,
+			directPercent:    10,
+			metaspaceMiB:     256,
+			systemReserveMiB: 2048,
+			wantHeapMiB:      3993,
+			wantDirectMiB:    614,
+			wantErr:          false,
+		},
+		{
+			name:             "Small memory with floor",
+			totalMemory:      2 * 1024 * 1024 * 1024, // 2GB
+			heapPercent:      65,
+			heapFloorMiB:     1024,
+			heapCeilMiB:      262144,
+			directPercent:    10,
+			metaspaceMiB:     256,
+			systemReserveMiB: 2048,
+			wantHeapMiB:      1024, // Floor of 1GB
+			wantDirectMiB:    0,    // No direct memory available
+			wantErr:          false,
+		},
+		{
+			name:             "Large memory with ceiling",
+			totalMemory:      512 * 1024 * 1024 * 1024, // 512GB
+			heapPercent:      65,
+			heapFloorMiB:     1024,
+			heapCeilMiB:      262144,
+			directPercent:    10,
+			metaspaceMiB:     256,
+			systemReserveMiB: 2048,
+			wantHeapMiB:      262144, // Ceiling of 256GB
+			wantDirectMiB:    52224,  // (522,240 * 10%) = 52,224 MiB
+			wantErr:          false,
+		},
+		{
+			name:             "Invalid heap percent",
+			totalMemory:      8 * 1024 * 1024 * 1024,
+			heapPercent:      0,
+			heapFloorMiB:     1024,
+			heapCeilMiB:      262144,
+			directPercent:    10,
+			metaspaceMiB:     256,
+			systemReserveMiB: 2048,
+			wantErr:          true,
+		},
+		{
+			name:             "Invalid direct percent",
+			totalMemory:      8 * 1024 * 1024 * 1024,
+			heapPercent:      65,
+			heapFloorMiB:     1024,
+			heapCeilMiB:      262144,
+			directPercent:    -1,
+			metaspaceMiB:     256,
+			systemReserveMiB: 2048,
+			wantErr:          true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Set environment variables for memory configuration
+			os.Setenv("AEROSPIKE_VECTOR_SEARCH_HEAP_PERCENT", strconv.Itoa(tt.heapPercent))
+			os.Setenv("AEROSPIKE_VECTOR_SEARCH_HEAP_FLOOR_MIB", strconv.Itoa(tt.heapFloorMiB))
+			os.Setenv("AEROSPIKE_VECTOR_SEARCH_HEAP_CEIL_MIB", strconv.Itoa(tt.heapCeilMiB))
+			os.Setenv("AEROSPIKE_VECTOR_SEARCH_DIRECT_PERCENT", strconv.Itoa(tt.directPercent))
+			os.Setenv("AEROSPIKE_VECTOR_SEARCH_METASPACE_MIB", strconv.Itoa(tt.metaspaceMiB))
+			os.Setenv("AEROSPIKE_VECTOR_SEARCH_SYSTEM_RESERVE_MIB", strconv.Itoa(tt.systemReserveMiB))
+
+			// Mock Sysinfo function
+			Sysinfo = func(info *syscall.Sysinfo_t) error {
+				info.Totalram = tt.totalMemory
+				return nil
+			}
+
+			heapMiB, directMiB, err := CalculateMemoryConfig()
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("Expected error but got none")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("Unexpected error: %v", err)
+				return
+			}
+
+			if heapMiB != tt.wantHeapMiB {
+				t.Errorf("Heap size = %d MiB, want %d MiB", heapMiB, tt.wantHeapMiB)
+			}
+
+			if directMiB != tt.wantDirectMiB {
+				t.Errorf("Direct memory = %d MiB, want %d MiB", directMiB, tt.wantDirectMiB)
 			}
 		})
 	}

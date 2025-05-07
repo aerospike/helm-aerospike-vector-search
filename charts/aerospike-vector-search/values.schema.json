@@ -62,6 +62,51 @@
       },
       "required": ["image"]
     },
+    "initMemory": {
+      "description": "JVM memory configuration for the AVS init container.",
+      "type": "object",
+      "properties": {
+        "heapPercent": {
+          "description": "Percentage of available memory to allocate to the JVM heap.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 65
+        },
+        "heapFloorMiB": {
+          "description": "Minimum heap size in MiB (1 GiB = 1024 MiB).",
+          "type": "integer",
+          "minimum": 1,
+          "default": 1024
+        },
+        "heapCeilMiB": {
+          "description": "Maximum heap size in MiB (256 GiB = 262144 MiB).",
+          "type": "integer",
+          "minimum": 1,
+          "default": 262144
+        },
+        "directPercent": {
+          "description": "Percentage of available memory to allocate to direct buffers.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "default": 10
+        },
+        "metaspaceMiB": {
+          "description": "Maximum metaspace size in MiB.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 256
+        },
+        "systemReserveMiB": {
+          "description": "Amount of memory to reserve for system (OS, kubelet, etc) in MiB.",
+          "type": "integer",
+          "minimum": 0,
+          "default": 2048
+        }
+      },
+      "required": ["heapPercent", "heapFloorMiB", "heapCeilMiB", "directPercent", "metaspaceMiB", "systemReserveMiB"]
+    },
     "aerospikeVectorSearchNodeRoles": {
       "description": "Mapping of node pool labels to AVS node roles. Nodes labeled in a given node pool (e.g. `query-nodes`) will receive the associated role (e.g. `query`). This lets the init container adjust configuration and schedule pods on specialized nodes.",
       "type": "object",

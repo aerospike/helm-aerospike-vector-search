@@ -1,25 +1,27 @@
 # Default values for aerospike-vector-search.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
-
 replicaCount: 1
-
 image:
   repository: "aerospike/aerospike-vector-search"
   pullPolicy: "IfNotPresent"
   # Overrides the image tag whose default is the chart appVersion.
   tag: "1.1.0"
-
 initContainer:
   image:
     repository: artifact.aerospike.io/container/avs-init-container
     tag: ""  # defaults to chart version
     pullPolicy: IfNotPresent
-
+initMemory:
+  heapPercent: 65  # 65% of available memory for heap
+  heapFloorMiB: 1024  # 1 GiB minimum heap
+  heapCeilMiB: 262144  # 256 GiB maximum heap
+  directPercent: 10  # 10% of available memory for direct buffers
+  metaspaceMiB: 256  # 256 MiB for JVM metaspace
+  systemReserveMiB: 2048  # 2 GiB reserved for system (OS, kubelet, etc)
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
-
 # Adding appropriate lables to node pools will cause avs pods with that role to be scheduled on nodes in that pool.
 aerospikeVectorSearchNodeRoles:
   query-nodes:
@@ -31,7 +33,6 @@ aerospikeVectorSearchNodeRoles:
   default-nodes:
     - query
     - index-update
-
 multiPodPerHost: true
 aerospikeVectorSearchConfig:
   # Optional: service ports configuration
@@ -43,7 +44,6 @@ aerospikeVectorSearchConfig:
   # Optional: interconnect ports configuration
   interconnect:
     ports: {}
-
 # cluster:
 #  # Unique identifier for this cluster.
 #  cluster-name: aerospike-vector-search
@@ -210,10 +210,7 @@ aerospikeVectorSearchConfig:
 #  enable-console-logging: true
 #  levels:
 #    root: debug
-
-
 initContainers: []
-
 serviceAccount:
   # Specifies whether a service account should be created
   create: true
@@ -224,23 +221,20 @@ serviceAccount:
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
   name: ""
-
 rbac:
   create: true
-
 podAnnotations: {}
 podLabels: {}
-
 podSecurityContext: {}
-  # fsGroup: 2000
+# fsGroup: 2000
 
 securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
+# capabilities:
+#   drop:
+#   - ALL
+# readOnlyRootFilesystem: true
+# runAsNonRoot: true
+# runAsUser: 1000
 
 service:
   enabled: false
@@ -257,12 +251,11 @@ service:
   ipFamilyPolicy: ""
   ipFamilies: []
   ports: []
-
 ingress:
   enabled: false
   className: ""
   annotations: {}
-    # kubernetes.io/ingress.class: nginx
+  # kubernetes.io/ingress.class: nginx
   # kubernetes.io/tls-acme: "true"
   hosts:
     - host: chart-example.local
@@ -273,26 +266,23 @@ ingress:
   #  - secretName: chart-example-tls
   #    hosts:
   #      - chart-example.local
-
 autoscaling:
   enabled: false
   minReplicas: 1
   maxReplicas: 100
   targetCPUUtilizationPercentage: 80
   # targetMemoryUtilizationPercentage: 80
-
 resources: {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
-
+# We usually recommend not to specify default resources and to leave this as a conscious
+# choice for the user. This also increases chances charts run on environments with little
+# resources, such as Minikube. If you do want to specify resources, uncomment the following
+# lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+# limits:
+#   cpu: 100m
+#   memory: 128Mi
+# requests:
+#   cpu: 100m
+#   memory: 128Mi
 
 # Additional volumes on the output Deployment definition.
 extraVolumes: []
@@ -311,9 +301,6 @@ extraSecretVolumeMounts: []
 #   mountPath: "/etc/foo"
 #   readOnly: true
 
-
 nodeSelector: {}
-
 tolerations: []
-
 affinity: {}
