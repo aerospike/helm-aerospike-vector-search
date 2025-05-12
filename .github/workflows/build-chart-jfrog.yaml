@@ -61,7 +61,7 @@ jobs:
           JF_PROJECT: ${{ env.JF_PROJECT }}
 
       - name: Set Helm Chart Version
-        uses: mikefarah/yq@c59fa8de59f1f5a16fdbfd1e2a6e97a1b42a64b9
+        uses: mikefarah/yq@b534aa9ee5d38001fba3cd8fe254a037e4847b37
         with: 
             cmd: yq e -i '.version = "${{ needs.setup.outputs.chart_version }}"' charts/$CHART_NAME/Chart.yaml
       - name: "Sign and publish build to JFrog"
